@@ -1,4 +1,6 @@
 bin
 deployment
 localclients.json
+node_modules
+clients/dashboard/node_modules
 .env

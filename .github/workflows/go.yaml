@@ -46,6 +46,8 @@ jobs:
           fetch-depth: 0
 
       - name: Publish Image
+        env:
+          DOCKER_BUILDKIT: 1
         run: |
           make docker-build-server
           make docker-build-cli
