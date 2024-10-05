@@ -40,8 +40,7 @@ import { Eye, Info, RefreshCw, RotateCw, Plus, X, type Volume1 } from 'lucide-re
 import { CreateTask } from './create';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-import { TaskHistory as TaskHistoryProto } from '@buf/evalsocket_cloud.bufbuild_es/cloud/v1/cloud_pb'; // Adjust this path if needed
-import { TaskStatusEnum } from "@/cloud/v1/cloud_pb";
+import { TaskHistory as TaskHistoryProto, TaskStatusEnum } from '@buf/evalsocket_cloud.bufbuild_es/cloud/v1/cloud_pb'; // Adjust this path if needed
 import { InputCode } from "@/components/task/editor";
 import { createTaskManagementClient, getStatusColor, getStatusString, type TaskInterface } from "@/components/task/util";
 import { TaskHistoryList } from "@/components/task/history";
