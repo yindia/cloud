@@ -1,0 +1,67 @@
+name: 🚀 Release
+
+on:
+  push:
+    # run only against tags
+    tags:
+      - "*"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  container:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Get Version from Tag
+        id: version
+        run: |
+          version=$(echo "${GITHUB_REF#refs/tags/}")
+          echo "Tagged version: $version"
+          echo "::set-output name=version::$version"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: yindia
+          password: ${{ secrets.GH_TOKEN }}
+      - name: Publish Image
+        run: |
+          VERSION="${{ steps.version.outputs.version }}" make push
+
+  buf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          buf_user: yindia
+          buf_api_token: ${{ secrets.BUF_API_TOKEN }}
+      - uses: bufbuild/buf-push-action@v1
+        with:
+          input: idl
+          buf_token: ${{ secrets.BUF_API_TOKEN }}
+
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - run: git fetch --force --tags
+      - uses: actions/setup-go@v4
+        with:
+          go-version: stable
+      - uses: goreleaser/goreleaser-action@v4
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}

@@ -1,0 +1,197 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "cloud/v1/cloud.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "TaskManagementService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {},
+  "definitions": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1CreateTaskResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Unique identifier for the created task. Must be \u003e= 0."
+        }
+      },
+      "title": "Message for Task creation response"
+    },
+    "v1GetStatusResponse": {
+      "type": "object",
+      "properties": {
+        "statusCounts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "format": "int64"
+          },
+          "title": "Map of task statuses and their counts"
+        }
+      },
+      "title": "Message for GetStatus response"
+    },
+    "v1GetTaskHistoryResponse": {
+      "type": "object",
+      "properties": {
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1TaskHistory"
+          },
+          "description": "List of task history entries. Minimum of 1 entry ensures that some history is always returned.\nMaximum of 1000 entries prevents excessive data transfer and processing for very long-running tasks."
+        }
+      },
+      "title": "Message for Task history response"
+    },
+    "v1Payload": {
+      "type": "object",
+      "properties": {
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Dynamic key-value pairs for task parameters. \nKeys must contain only alphanumeric characters, underscores, or dashes. \nValues are limited to 1024 characters to prevent excessive data storage."
+        }
+      },
+      "title": "Message for Task Payload"
+    },
+    "v1Task": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Unique identifier for the task. Must be \u003e= 0."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the task. Must be alphanumeric, underscores, or dashes, \nwith a maximum length of 255 characters."
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of the task, must be either SEND_EMAIL or RUN_QUERY."
+        },
+        "status": {
+          "$ref": "#/definitions/v1TaskStatusEnum",
+          "description": "Current status of the task, must be one of the defined statuses."
+        },
+        "retries": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Number of retries attempted for this task. Limited to 10 to prevent\ninfinite retry loops while allowing for reasonable error recovery."
+        },
+        "priority": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Priority level of the task. Higher values indicate higher priority.\nMust be non-negative to ensure valid prioritization."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of when the task was created, in ISO 8601 format (UTC).\nThis format ensures consistent time representation across different systems."
+        },
+        "payload": {
+          "$ref": "#/definitions/v1Payload",
+          "description": "Payload containing task parameters. This field is required."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the task. A large text string with a maximum length of 5000 characters."
+        }
+      },
+      "title": "Message for Task status"
+    },
+    "v1TaskHistory": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Unique identifier for the history entry. Must be \u003e= 0."
+        },
+        "status": {
+          "$ref": "#/definitions/v1TaskStatusEnum",
+          "description": "Status of the task at the time of this history entry."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of when this history entry was created, in ISO 8601 format."
+        },
+        "details": {
+          "type": "string",
+          "description": "Additional details about the task's execution or status. \nMaximum length of 2000 characters."
+        }
+      },
+      "title": "Message for Task history"
+    },
+    "v1TaskList": {
+      "type": "object",
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Task"
+          },
+          "description": "List of tasks in the system."
+        }
+      },
+      "title": "Message for Task List"
+    },
+    "v1TaskStatusEnum": {
+      "type": "string",
+      "enum": [
+        "QUEUED",
+        "RUNNING",
+        "FAILED",
+        "SUCCEEDED",
+        "UNKNOWN",
+        "ALL"
+      ],
+      "default": "QUEUED",
+      "description": "- QUEUED: Task is in the queue, waiting to be processed\n - RUNNING: Task is currently being executed\n - FAILED: Task encountered an error and failed to complete\n - SUCCEEDED: Task completed successfully\n - UNKNOWN: Task status cannot be determined\n - ALL: Task status cannot be determined",
+      "title": "Enum for Task statuses"
+    }
+  }
+}

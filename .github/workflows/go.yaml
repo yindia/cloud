@@ -1,0 +1,52 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go Checks
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.22"
+
+      - name: Setup
+        run: |
+          go mod tidy
+          go install github.com/vektra/mockery/v2@v2.46.0
+
+      - name: Build Server
+        run: go generate -v ./...
+
+      - name: Test
+        run: go test -v ./...
+
+      - name: Build Server
+        run: make build-server
+
+      - name: Build Server
+        run: make build-cli
+
+  container:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Publish Image
+        run: |
+          make docker-build-server
+          make docker-build-cli
+          make docker-build-dashboard

@@ -1,0 +1,74 @@
+version: '3.1'
+
+services:
+  db:
+    image: postgres:16.1
+    restart: always
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_DB=tasks
+      - POSTGRES_PASSWORD=admin
+    ports:
+      - "5432:5432"
+    networks:
+      - task-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  river:
+    image: evalsocket/river:latest
+    command: ["migrate-up", "--database-url", "postgres://admin:admin@db:5432/tasks"]
+    depends_on:
+      db:
+        condition: service_healthy
+    links:
+      - db
+    env_file:
+      - .env.docker
+    networks:
+      - task-network
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    links:
+      - db
+      - task
+      - river
+    env_file:
+      - .env.docker
+    networks:
+      - task-network
+
+  task:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: server-final
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    links:
+      - db
+      - river
+    env_file:
+      - .env.docker
+    networks:
+      - task-network
+
+
+networks:
+  task-network:
+    driver: bridge

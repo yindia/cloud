@@ -1,0 +1,45 @@
+# Stage 1: Building the Next.js application
+FROM node:20.9.0-alpine AS builder
+
+WORKDIR /app
+
+# Copy package.json and package-lock.json
+COPY clients/dashboard/package*.json ./
+
+# Install dependencies with caching
+RUN npm config set @buf:registry https://buf.build/gen/npm/v1/
+RUN --mount=type=cache,target=/root/.npm \
+  npm install --force
+
+# Copy the rest of the application code
+COPY clients/dashboard .
+
+# Build the Next.js application
+RUN --mount=type=cache,target=/root/.npm \
+  npm run build
+
+# Stage 2: Running the Next.js application
+FROM node:20.9.0-alpine AS runner
+
+WORKDIR /app
+
+# Copy built assets from the builder stage
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/public ./public
+
+# Set environment variables
+ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED 1
+
+# Add non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+USER nextjs
+
+# Expose the port the app runs on
+EXPOSE 3000
+
+# Start the application
+CMD ["npm", "start"]

@@ -1,0 +1,4 @@
+bin
+deployment
+localclients.json
+.env

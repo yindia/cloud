@@ -1,0 +1,219 @@
+syntax = "proto3";
+
+package cloud.v1;
+
+import "validate/validate.proto";
+import "google/protobuf/empty.proto";
+
+// Enum for Task statuses
+enum TaskStatusEnum {
+    QUEUED = 0;    // Task is in the queue, waiting to be processed
+    RUNNING = 1;   // Task is currently being executed
+    FAILED = 2;    // Task encountered an error and failed to complete
+    SUCCEEDED = 3; // Task completed successfully
+    UNKNOWN = 4;   // Task status cannot be determined
+    ALL = 5;   // Task status cannot be determined
+}
+
+// Message for Task Payload
+message Payload {
+    // Dynamic key-value pairs for task parameters. 
+    // Keys must contain only alphanumeric characters, underscores, or dashes. 
+    // Values are limited to 1024 characters to prevent excessive data storage.
+    map<string, string> parameters = 1 [(validate.rules).map = {
+        keys: {string: {pattern: "^[a-zA-Z0-9_-]+$"}},
+        values: {string: {max_len: 1024}}
+    }];
+}
+
+// Message for Task creation request
+message CreateTaskRequest {
+    // Name of the task. Must contain only alphanumeric characters, underscores, or dashes, 
+    // with a maximum length of 255 characters for readability and database compatibility.
+    string name = 1 [(validate.rules).string = {
+        pattern: "^[a-zA-Z0-9_-]+$",
+        max_len: 255
+    }];
+
+    // Type of the task. Must be either SEND_EMAIL or RUN_QUERY.
+    // This field is an enum to ensure only predefined task types are used.
+    string type = 2 [(validate.rules).enum = {defined_only: true}];
+
+    // Payload containing task parameters. This field is required to ensure
+    // all necessary information for task execution is provided.
+    Payload payload = 3 [(validate.rules).message.required = true];
+
+    // Description of the task. Allows for a detailed explanation of the task's purpose.
+    // Limited to 5000 characters to balance between providing sufficient detail and 
+    // preventing excessively long descriptions.
+    string description = 4 [(validate.rules).string = {
+        max_len: 5000
+    }];
+}
+
+// Message for Task creation response
+message CreateTaskResponse {
+    // Unique identifier for the created task. Must be >= 0.
+    int32 id = 1 [(validate.rules).int32 = {gte: 0}];
+}
+
+// Message for Task status
+message Task {
+    // Unique identifier for the task. Must be >= 0.
+    int32 id = 1 [(validate.rules).int32 = {gte: 0}];
+
+    // Name of the task. Must be alphanumeric, underscores, or dashes, 
+    // with a maximum length of 255 characters.
+    string name = 2 [(validate.rules).string = {
+        pattern: "^[a-zA-Z0-9_-]+$",
+        max_len: 255
+    }];
+
+    // Type of the task, must be either SEND_EMAIL or RUN_QUERY.
+    string type = 3 [(validate.rules).enum = {defined_only: true}];
+
+    // Current status of the task, must be one of the defined statuses.
+    TaskStatusEnum status = 4 [(validate.rules).enum = {defined_only: true}];
+
+    // Number of retries attempted for this task. Limited to 10 to prevent
+    // infinite retry loops while allowing for reasonable error recovery.
+    int32 retries = 5 [(validate.rules).int32 = {
+        gte: 0,
+        lte: 10
+    }];
+
+    // Priority level of the task. Higher values indicate higher priority.
+    // Must be non-negative to ensure valid prioritization.
+    int32 priority = 6 [(validate.rules).int32 = {gte: 0}];
+
+    // Timestamp of when the task was created, in ISO 8601 format (UTC).
+    // This format ensures consistent time representation across different systems.
+    string created_at = 7 [(validate.rules).string = {
+        pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    }];
+
+    // Payload containing task parameters. This field is required.
+    Payload payload = 8 [(validate.rules).message.required = true];
+    
+    // Description of the task. A large text string with a maximum length of 5000 characters.
+    string description = 9 [(validate.rules).string = {
+        max_len: 5000
+    }];
+}
+
+// Message for Task history
+message TaskHistory {
+    // Unique identifier for the history entry. Must be >= 0.
+    int32 id = 1 [(validate.rules).int32 = {gte: 0}];
+
+    // Status of the task at the time of this history entry.
+    TaskStatusEnum status = 2 [(validate.rules).enum = {defined_only: true}];
+
+    // Timestamp of when this history entry was created, in ISO 8601 format.
+    string created_at = 3 [(validate.rules).string = {
+        pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    }];
+
+    // Additional details about the task's execution or status. 
+    // Maximum length of 2000 characters.
+    string details = 4 [(validate.rules).string = {max_len: 2000}];
+}
+
+// Message for Task status request
+message GetTaskRequest {
+    // Unique identifier for the task. Must be >= 0.
+    int32 id = 1 [(validate.rules).int32 = {gte: 0}];
+}
+
+// Message for Task history request
+message GetTaskHistoryRequest {
+    // Unique identifier for the task. Must be >= 0.
+    int32 id = 1 [(validate.rules).int32 = {gte: 0}];
+}
+
+// Message for Task history response
+message GetTaskHistoryResponse {
+    // List of task history entries. Minimum of 1 entry ensures that some history is always returned.
+    // Maximum of 1000 entries prevents excessive data transfer and processing for very long-running tasks.
+    repeated TaskHistory history = 1 [(validate.rules).repeated = {
+        min_items: 1,
+        max_items: 1000
+    }];
+}
+
+// Message for Task status update request
+message UpdateTaskStatusRequest {
+    // Unique identifier for the task. Must be >= 0.
+    int32 id = 1 [(validate.rules).int32 = {gte: 0}];
+
+    // New status for the task, must be one of the defined statuses.
+    TaskStatusEnum status = 2 [(validate.rules).enum = {defined_only: true}];
+
+    // Additional message about the status update. Maximum length of 2000 characters.
+    string message = 3 [(validate.rules).string = {max_len: 2000}];
+}
+
+
+// Task Management service definition
+service TaskManagementService {
+    // Creates a new task based on the provided request.
+    // Returns a CreateTaskResponse containing the unique identifier of the created task.
+    rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse) {}
+
+    // Retrieves the current status and details of the specified task.
+    // Returns a Task message containing all information about the requested task.
+    rpc GetTask(GetTaskRequest) returns (Task) {}
+
+    // Lists tasks currently available in the system, with pagination support.
+    // Returns a TaskList containing the requested subset of tasks.
+    rpc ListTasks(TaskListRequest) returns (TaskList) {}
+
+    // Retrieves the execution history of the specified task.
+    // Returns a GetTaskHistoryResponse containing a list of historical status updates.
+    rpc GetTaskHistory(GetTaskHistoryRequest) returns (GetTaskHistoryResponse) {}
+    
+    // Updates the status of the specified task.
+    // Returns an empty response to confirm the update was processed.
+    rpc UpdateTaskStatus(UpdateTaskStatusRequest) returns (google.protobuf.Empty) {}
+
+    // Retrieves the count of tasks for each status.
+    // Returns a GetStatusResponse containing a map of status counts.
+    rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
+}
+
+// Message for GetStatus request (empty)
+message GetStatusRequest {}
+
+// Message for GetStatus response
+message GetStatusResponse {
+    // Map of task statuses and their counts
+    map<int32, int64> status_counts = 1;
+}
+
+// Message for Task List
+message TaskList {
+    repeated Task tasks = 1; // List of tasks in the system.
+}
+
+// Message for Task List request
+message TaskListRequest {
+    // Maximum number of tasks to return in a single request.
+    // Limited between 1 and 100 to balance between minimizing requests and preventing excessive data transfer.
+    int32 limit = 1 [(validate.rules).int32 = {
+        gte: 1,
+        lte: 100
+    }];
+
+    // Number of tasks to skip before starting to return results.
+    // Allows for pagination of results. Must be non-negative.
+    int32 offset = 2 [(validate.rules).int32.gte = 0];
+
+    // Optional filter for tasks by status. If not specified, tasks of all statuses will be returned.
+    optional TaskStatusEnum status = 3;
+
+    // Optional filter for tasks by type. Must be either SEND_EMAIL or RUN_QUERY if specified.
+    // If not specified, tasks of all types will be returned.
+    optional string type = 4 [(validate.rules).string = {
+        in: ["send_email", "run_query"]
+    }];
+}

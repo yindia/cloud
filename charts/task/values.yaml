@@ -1,0 +1,120 @@
+# Default values for chartexample.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: evalsocket/task
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "e95c995"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  {}
+  # fsGroup: 2000
+
+securityContext:
+  {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  annotations:
+    {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: task.local
+      paths: []
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+#resources: {}
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube. If you do want to specify resources, uncomment the following
+# lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+resources:
+  limits:
+    cpu: 500m
+    memory: 750Mi
+  requests:
+    cpu: 500m
+    memory: 750Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+## newly added on top of default values provided by helm create.
+
+port:
+  containerPort: 8080
+
+env: []
+
+secret:
+  data:
+    SERVER_PORT: "8080"
+    WORKER_COUNT: 100
+    SERVER_ENDPOINT: "http://task.task.svc.cluster.local"
+    NEXT_PUBLIC_SERVER_ENDPOINT: "http://task.task.svc.cluster.local"
+    DB_HOST: "task-postgresql"
+    DB_PORT: "5432"
+    DB_DATABASE: "task"
+    DB_USERNAME: "admin"
+    DB_PASSWORD: "notAsSecretU5erPa55word"
+    DB_SSL_MODE: "disable"
+    DB_POOL_MAX_CONNS: "30"
+
+postgresql:
+  enabled: true
+  global:
+    postgresql:
+      auth:
+        postgresPassword: "SuperSecretPGAdminPa55word!"
+        username: "admin"
+        password: "notAsSecretU5erPa55word"
+        database: "task"
+  primary:
+    persistence:
+      enabled: false
+    initdb:
+      user: "postgres"
+      password: "SuperSecretPGAdminPa55word!"
