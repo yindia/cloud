@@ -11,6 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	cloudv1connect "task/pkg/gen/cloud/v1/cloudv1connect"
+	"task/pkg/x"                                  // Import the x package for env and config
+	repository "task/server/repository"           // Import repository package
+	interfaces "task/server/repository/interface" // Import repository package
+	"task/server/route"                           // Import route package
+	oauth2 "task/server/route/oauth2"
+
 	"connectrpc.com/connect"
 	"connectrpc.com/grpchealth"
 	"connectrpc.com/grpcreflect"
@@ -19,12 +26,6 @@ import (
 	"go.akshayshah.org/connectauth"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
-
-	cloudv1connect "task/pkg/gen/cloud/v1/cloudv1connect"
-	"task/pkg/x"                                  // Import the x package for env and config
-	repository "task/server/repository"           // Import repository package
-	interfaces "task/server/repository/interface" // Import repository package
-	"task/server/route"                           // Import route package
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -111,14 +112,34 @@ func run() error {
 
 	slog.Info("Database repository initialized", "workerCount", env.WorkerCount)
 
+	auth, err := oauth2.NewAuthServer(oauth2.Config{
+		Issuer:       "https://fosite.my-application.com",
+		ClientID:     "my-client",
+		ClientSecret: "my-secret",
+		RedirectURL:  "http://localhost:8080/callback",
+		SessionKey:   "session",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize authorization server: %w", err)
+	}
+
 	// Set up gRPC middleware
-	middleware := connectauth.NewMiddleware(GrpcMiddleware)
+	middleware := connectauth.NewMiddleware(func(ctx context.Context, req *connectauth.Request) (any, error) {
+		if auth.IsAuthenticated(req) {
+			return AuthCtx{Username: "tqindia"}, nil
+		}
+		return nil, errors.New("user is not authenticated")
+	})
 
 	// Set up HTTP server
 	mux := http.NewServeMux()
 	if err := setupHandlers(mux, repo, middleware); err != nil {
 		return fmt.Errorf("failed to set up handlers: %w", err)
 	}
+
+	http.HandleFunc("/login", auth.LoginHandler)
+	http.HandleFunc("/authorization-code/callback", auth.AuthCodeCallbackHandler)
+	http.HandleFunc("/logout", auth.LogoutHandler)
 
 	// Add Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
