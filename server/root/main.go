@@ -39,6 +39,14 @@ type AuthCtx struct {
 	Username string
 }
 
+type Config struct {
+	OAuth2 struct {
+		Issuer       string
+		ClientID     string
+		ClientSecret string
+	}
+}
+
 // newCORS initializes CORS settings for the server
 // It allows all origins and methods, and exposes necessary headers for gRPC-Web
 func newCORS() *cors.Cors {
@@ -113,10 +121,10 @@ func run() error {
 	slog.Info("Database repository initialized", "workerCount", env.WorkerCount)
 
 	auth, err := oauth2.NewAuthServer(oauth2.Config{
-		Issuer:       "https://fosite.my-application.com",
-		ClientID:     "my-client",
-		ClientSecret: "my-secret",
-		RedirectURL:  "http://localhost:8080/callback",
+		Issuer:       env.OAuth2.Issuer,
+		ClientID:     env.OAuth2.ClientID,
+		ClientSecret: env.OAuth2.ClientSecret,
+		RedirectURL:  "/authorization-code/callback",
 		SessionKey:   "session",
 	})
 	if err != nil {
