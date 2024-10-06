@@ -8,12 +8,17 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gorilla/sessions"
 	"go.akshayshah.org/connectauth"
 	"golang.org/x/oauth2"
+)
+
+const (
+	sessionName = "custom-auth-session-store"
 )
 
 // Config represents the configuration for the AuthServer
@@ -113,14 +118,14 @@ func (as *AuthServer) AuthCodeCallbackHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	idToken, err := as.verifier.Verify(r.Context(), rawIDToken)
+	_, err = as.verifier.Verify(r.Context(), rawIDToken)
 	if err != nil {
 		http.Error(w, "Failed to verify ID Token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	as.mu.Lock()
-	session, err := as.sessionStore.Get(r, "okta-hosted-login-session-store")
+	session, err := as.sessionStore.Get(r, sessionName)
 	as.mu.Unlock()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -142,7 +147,7 @@ func (as *AuthServer) AuthCodeCallbackHandler(w http.ResponseWriter, r *http.Req
 // LogoutHandler handles the logout request
 func (as *AuthServer) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	as.mu.Lock()
-	session, err := as.sessionStore.Get(r, "okta-hosted-login-session-store")
+	session, err := as.sessionStore.Get(r, sessionName)
 	as.mu.Unlock()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -163,15 +168,18 @@ func (as *AuthServer) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 // IsAuthenticated checks if the user is authenticated
 func (as *AuthServer) IsAuthenticated(r *connectauth.Request) bool {
-	as.mu.Lock()
-	session, err := as.sessionStore.Get(r, "okta-hosted-login-session-store")
-	as.mu.Unlock()
-
-	if err != nil || session.Values["id_token"] == nil || session.Values["id_token"] == "" {
-		return false
+	// Check for bearer token in the Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		// Verify the token
+		_, err := as.verifier.Verify(context.Background(), token)
+		if err == nil {
+			return false
+		}
+		return true
 	}
-
-	return true
+	return false
 }
 
 // getProfileData retrieves the user's profile data
