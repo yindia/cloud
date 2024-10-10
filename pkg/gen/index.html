@@ -302,6 +302,10 @@
             <ul>
               
                 <li>
+                  <a href="#cloud.v1.CommandResult"><span class="badge">M</span>CommandResult</a>
+                </li>
+              
+                <li>
                   <a href="#cloud.v1.CreateTaskRequest"><span class="badge">M</span>CreateTaskRequest</a>
                 </li>
               
@@ -334,11 +338,27 @@
                 </li>
               
                 <li>
+                  <a href="#cloud.v1.Heartbeat"><span class="badge">M</span>Heartbeat</a>
+                </li>
+              
+                <li>
                   <a href="#cloud.v1.Payload"><span class="badge">M</span>Payload</a>
                 </li>
               
                 <li>
                   <a href="#cloud.v1.Payload.ParametersEntry"><span class="badge">M</span>Payload.ParametersEntry</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.RunCommand"><span class="badge">M</span>RunCommand</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.StreamRequest"><span class="badge">M</span>StreamRequest</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.StreamResponse"><span class="badge">M</span>StreamResponse</a>
                 </li>
               
                 <li>
@@ -361,6 +381,10 @@
                   <a href="#cloud.v1.UpdateTaskStatusRequest"><span class="badge">M</span>UpdateTaskStatusRequest</a>
                 </li>
               
+              
+                <li>
+                  <a href="#cloud.v1.CommandResult.Status"><span class="badge">E</span>CommandResult.Status</a>
+                </li>
               
                 <li>
                   <a href="#cloud.v1.TaskStatusEnum"><span class="badge">E</span>TaskStatusEnum</a>
@@ -2423,6 +2447,73 @@ validation fails if no fields in the oneof are set.</p></td>
       <p></p>
 
       
+        <h3 id="cloud.v1.CommandResult">CommandResult</h3>
+        <p>CommandResult message for returning command execution results</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>command_id</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p>Unique identifier of the executed command </p></td>
+                </tr>
+              
+                <tr>
+                  <td>result</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p>Result of the command execution </p></td>
+                </tr>
+              
+                <tr>
+                  <td>status</td>
+                  <td><a href="#cloud.v1.CommandResult.Status">CommandResult.Status</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+            
+            
+            <h4>Validated Fields</h4>
+            <table>
+              <thead>
+                <tr>
+                  <td>Field</td>
+                  <td>Validations</td>
+                </tr>
+              </thead>
+              <tbody>
+              
+                <tr>
+                  <td>command_id</td>
+                  <td>
+                    <ul>
+                    
+                      <li>string.max_len: 255</li>
+                    
+                      <li>string.pattern: ^[a-zA-Z0-9_-]&#43;$</li>
+                    
+                    </ul>
+                  </td>
+                </tr>
+              
+              </tbody>
+            </table>
+            
+          
+
+        
+      
         <h3 id="cloud.v1.CreateTaskRequest">CreateTaskRequest</h3>
         <p>Message for Task creation request</p>
 
@@ -2804,6 +2895,57 @@ Maximum of 1000 entries prevents excessive data transfer and processing for very
 
         
       
+        <h3 id="cloud.v1.Heartbeat">Heartbeat</h3>
+        <p>Heartbeat message for keeping the connection alive</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>timestamp</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p>Timestamp of the heartbeat, in ISO 8601 format (UTC) </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+            
+            
+            <h4>Validated Fields</h4>
+            <table>
+              <thead>
+                <tr>
+                  <td>Field</td>
+                  <td>Validations</td>
+                </tr>
+              </thead>
+              <tbody>
+              
+                <tr>
+                  <td>timestamp</td>
+                  <td>
+                    <ul>
+                    
+                      <li>string.pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$</li>
+                    
+                    </ul>
+                  </td>
+                </tr>
+              
+              </tbody>
+            </table>
+            
+          
+
+        
+      
         <h3 id="cloud.v1.Payload">Payload</h3>
         <p>Message for Task Payload</p>
 
@@ -2879,6 +3021,141 @@ Values are limited to 1024 characters to prevent excessive data storage. </p></t
                 <tr>
                   <td>value</td>
                   <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+        <h3 id="cloud.v1.RunCommand">RunCommand</h3>
+        <p>RunCommand message for executing commands</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>command_id</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p>Unique identifier for the command </p></td>
+                </tr>
+              
+                <tr>
+                  <td>command</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p>The command to be executed </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+            
+            
+            <h4>Validated Fields</h4>
+            <table>
+              <thead>
+                <tr>
+                  <td>Field</td>
+                  <td>Validations</td>
+                </tr>
+              </thead>
+              <tbody>
+              
+                <tr>
+                  <td>command_id</td>
+                  <td>
+                    <ul>
+                    
+                      <li>string.max_len: 255</li>
+                    
+                      <li>string.pattern: ^[a-zA-Z0-9_-]&#43;$</li>
+                    
+                    </ul>
+                  </td>
+                </tr>
+              
+                <tr>
+                  <td>command</td>
+                  <td>
+                    <ul>
+                    
+                      <li>string.min_len: 1</li>
+                    
+                      <li>string.max_len: 1000</li>
+                    
+                    </ul>
+                  </td>
+                </tr>
+              
+              </tbody>
+            </table>
+            
+          
+
+        
+      
+        <h3 id="cloud.v1.StreamRequest">StreamRequest</h3>
+        <p>Message for stream requests</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>heartbeat</td>
+                  <td><a href="#cloud.v1.Heartbeat">Heartbeat</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>run_command</td>
+                  <td><a href="#cloud.v1.RunCommand">RunCommand</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+        <h3 id="cloud.v1.StreamResponse">StreamResponse</h3>
+        <p>Message for stream responses</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>heartbeat</td>
+                  <td><a href="#cloud.v1.Heartbeat">Heartbeat</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>command_result</td>
+                  <td><a href="#cloud.v1.CommandResult">CommandResult</a></td>
                   <td></td>
                   <td><p> </p></td>
                 </tr>
@@ -3411,6 +3688,29 @@ If not specified, tasks of all types will be returned. </p></td>
       
 
       
+        <h3 id="cloud.v1.CommandResult.Status">CommandResult.Status</h3>
+        <p>Status of the command execution</p>
+        <table class="enum-table">
+          <thead>
+            <tr><td>Name</td><td>Number</td><td>Description</td></tr>
+          </thead>
+          <tbody>
+            
+              <tr>
+                <td>SUCCESS</td>
+                <td>0</td>
+                <td><p></p></td>
+              </tr>
+            
+              <tr>
+                <td>FAILURE</td>
+                <td>1</td>
+                <td><p></p></td>
+              </tr>
+            
+          </tbody>
+        </table>
+      
         <h3 id="cloud.v1.TaskStatusEnum">TaskStatusEnum</h3>
         <p>Enum for Task statuses</p>
         <table class="enum-table">
@@ -3516,6 +3816,13 @@ Returns an empty response to confirm the update was processed.</p></td>
                 <td><a href="#cloud.v1.GetStatusResponse">GetStatusResponse</a></td>
                 <td><p>Retrieves the count of tasks for each status.
 Returns a GetStatusResponse containing a map of status counts.</p></td>
+              </tr>
+            
+              <tr>
+                <td>StreamConnection</td>
+                <td><a href="#cloud.v1.StreamRequest">StreamRequest</a> stream</td>
+                <td><a href="#cloud.v1.StreamResponse">StreamResponse</a> stream</td>
+                <td><p></p></td>
               </tr>
             
           </tbody>

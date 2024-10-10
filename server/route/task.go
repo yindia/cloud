@@ -2,7 +2,9 @@ package route
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	v1 "task/pkg/gen/cloud/v1"
@@ -285,6 +287,27 @@ func (s *TaskServer) GetStatus(ctx context.Context, req *connect.Request[v1.GetS
 
 	s.logger.Printf("Task status counts retrieved successfully")
 	return connect.NewResponse(response), nil
+}
+
+// GetStatus retrieves the count of tasks for each status.
+func (s *TaskServer) StreamConnection(ctx context.Context, stream *connect.BidiStream[v1.StreamRequest, v1.StreamResponse]) error {
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		request, err := stream.Receive()
+		if err != nil && errors.Is(err, io.EOF) {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("receive request: %w", err)
+		}
+		fmt.Println(request)
+		if err := stream.Send(&v1.StreamResponse{Response: &v1.StreamResponse_Heartbeat{Heartbeat: &v1.Heartbeat{}}}); err != nil {
+			return fmt.Errorf("send response: %w", err)
+		}
+	}
+	return nil
 }
 
 // createTaskStatusHistory creates a new task history entry for the status update.

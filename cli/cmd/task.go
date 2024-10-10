@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -12,8 +13,11 @@ import (
 
 	// Add this import
 
+	"time"
+
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 )
 
 // taskCmd represents the task command
@@ -119,10 +123,74 @@ var taskStatusCmd = &cobra.Command{
 	},
 }
 
+// taskStatusCmd represents the task status command
+var taskStreamCmd = &cobra.Command{
+	Use:     "stream",
+	Aliases: []string{},
+	Short:   "Stream task updates",
+	Long:    `Continuously stream task updates from the server.`,
+	Example: `  task stream`,
+	Args:    cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Create gRPC client
+
+		conn, err := grpc.Dial("localhost:8080", grpc.WithInsecure())
+		if err != nil {
+			slog.Error("Failed to connect to gRPC server", "error", err)
+			return err
+		}
+		defer conn.Close()
+
+		client := v1.NewTaskManagementServiceClient(conn)
+
+		ctx, cancel := context.WithCancel(cmd.Context())
+		defer cancel()
+
+		// Call StreamConnection
+		stream, err := client.StreamConnection(ctx)
+		if err != nil {
+			slog.Error("Failed to start stream", "error", err)
+			return fmt.Errorf("failed to start stream: %w", err)
+		}
+
+		// Start a goroutine to send periodic requests
+		go func() {
+			ticker := time.NewTicker(5 * time.Second)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if err := stream.Send(&v1.StreamRequest{Request: &v1.StreamRequest_RunCommand{RunCommand: &v1.RunCommand{}}}); err != nil {
+						slog.Error("Error sending request", "error", err)
+						cancel()
+						return
+					}
+				}
+			}
+		}()
+
+		// Receive and print responses
+		for {
+			response, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF || ctx.Err() != nil {
+					return nil
+				}
+				slog.Error("Error receiving response", "error", err)
+				return fmt.Errorf("error receiving response: %w", err)
+			}
+			fmt.Println(response)
+		}
+	},
+}
+
 // init function to set up commands and flags
 func init() {
 
-	taskCmd.AddCommand(createTaskCmd, getTaskCmd, listTaskCmd, taskStatusCmd)
+	taskCmd.AddCommand(createTaskCmd, getTaskCmd, listTaskCmd, taskStatusCmd, taskStreamCmd)
 
 	addCommonFlags := func(cmd *cobra.Command) {
 		cmd.Flags().Int64P("id", "i", 0, "ID of the task")

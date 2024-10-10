@@ -15,6 +15,8 @@ import (
 	"github.com/gorilla/sessions"
 	"go.akshayshah.org/connectauth"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/github"
+	"golang.org/x/oauth2/google"
 )
 
 const (
@@ -23,6 +25,7 @@ const (
 
 // Config represents the configuration for the AuthServer
 type Config struct {
+	Provider     string // "google", "github", "facebook", or "okta"
 	Issuer       string
 	ClientID     string
 	ClientSecret string
@@ -43,23 +46,52 @@ type AuthServer struct {
 // NewAuthServer creates and initializes a new AuthServer
 func NewAuthServer(config Config) (*AuthServer, error) {
 	ctx := context.Background()
-	provider, err := oidc.NewProvider(ctx, config.Issuer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get provider: %v", err)
-	}
 
-	oauth2Config := oauth2.Config{
-		ClientID:     config.ClientID,
-		ClientSecret: config.ClientSecret,
-		RedirectURL:  config.RedirectURL,
-		Endpoint:     provider.Endpoint(),
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
-	}
+	var oauth2Config oauth2.Config
+	var verifier *oidc.IDTokenVerifier
 
-	oidcConfig := &oidc.Config{
-		ClientID: config.ClientID,
+	switch config.Provider {
+	case "google":
+		oauth2Config = oauth2.Config{
+			ClientID:     config.ClientID,
+			ClientSecret: config.ClientSecret,
+			RedirectURL:  config.RedirectURL,
+			Endpoint:     google.Endpoint,
+			Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+		}
+		provider, err := oidc.NewProvider(ctx, "https://accounts.google.com")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get Google provider: %v", err)
+		}
+		verifier = provider.Verifier(&oidc.Config{ClientID: config.ClientID})
+
+	case "github":
+		oauth2Config = oauth2.Config{
+			ClientID:     config.ClientID,
+			ClientSecret: config.ClientSecret,
+			RedirectURL:  config.RedirectURL,
+			Endpoint:     github.Endpoint,
+			Scopes:       []string{"user:email"},
+		}
+		// GitHub doesn't support OIDC, so we'll need to handle token verification differently
+
+	case "okta":
+		provider, err := oidc.NewProvider(ctx, config.Issuer)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get Okta provider: %v", err)
+		}
+		oauth2Config = oauth2.Config{
+			ClientID:     config.ClientID,
+			ClientSecret: config.ClientSecret,
+			RedirectURL:  config.RedirectURL,
+			Endpoint:     provider.Endpoint(),
+			Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+		}
+		verifier = provider.Verifier(&oidc.Config{ClientID: config.ClientID})
+
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", config.Provider)
 	}
-	verifier := provider.Verifier(oidcConfig)
 
 	return &AuthServer{
 		config:       config,

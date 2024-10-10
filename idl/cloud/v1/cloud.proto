@@ -178,8 +178,69 @@ service TaskManagementService {
 
     // Retrieves the count of tasks for each status.
     // Returns a GetStatusResponse containing a map of status counts.
-    rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
+    rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}    
+
+    rpc StreamConnection(stream StreamRequest) returns (stream StreamResponse) {}
 }
+
+// Message for stream requests
+message StreamRequest {
+    oneof request {
+        Heartbeat heartbeat = 1;
+        RunCommand run_command = 2;
+    }
+}
+
+// Message for stream responses
+message StreamResponse {
+    oneof response {
+        Heartbeat heartbeat = 1;
+        CommandResult command_result = 2;
+    }
+}
+
+// Heartbeat message for keeping the connection alive
+message Heartbeat {
+    // Timestamp of the heartbeat, in ISO 8601 format (UTC)
+    string timestamp = 1 [(validate.rules).string = {
+        pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    }];
+}
+
+// RunCommand message for executing commands
+message RunCommand {
+    // Unique identifier for the command
+    string command_id = 1 [(validate.rules).string = {
+        pattern: "^[a-zA-Z0-9_-]+$",
+        max_len: 255
+    }];
+    
+    // The command to be executed
+    string command = 2 [(validate.rules).string = {
+        min_len: 1,
+        max_len: 1000
+    }];
+}
+
+// CommandResult message for returning command execution results
+message CommandResult {
+    // Unique identifier of the executed command
+    string command_id = 1 [(validate.rules).string = {
+        pattern: "^[a-zA-Z0-9_-]+$",
+        max_len: 255
+    }];
+    
+    // Result of the command execution
+    string result = 2;
+    
+    // Status of the command execution
+    enum Status {
+        SUCCESS = 0;
+        FAILURE = 1;
+    }
+    Status status = 3;
+}
+
 
 // Message for GetStatus request (empty)
 message GetStatusRequest {}

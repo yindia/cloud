@@ -11,6 +11,11 @@ plugins:
     out: pkg/gen/
     opt:
       - paths=source_relative
+  - plugin: buf.build/grpc/go:v1.5.1
+    out: pkg/gen/
+    opt:
+      - paths=source_relative
+
   - plugin: buf.build/protocolbuffers/go
     out: pkg/gen/
     opt:

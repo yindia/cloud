@@ -17,16 +17,7 @@
   ],
   "paths": {},
   "definitions": {
-    "protobufAny": {
-      "type": "object",
-      "properties": {
-        "@type": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": {}
-    },
-    "rpcStatus": {
+    "googlerpcStatus": {
       "type": "object",
       "properties": {
         "code": {
@@ -44,6 +35,41 @@
           }
         }
       }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "v1CommandResult": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "title": "Unique identifier of the executed command"
+        },
+        "result": {
+          "type": "string",
+          "title": "Result of the command execution"
+        },
+        "status": {
+          "$ref": "#/definitions/v1CommandResultStatus"
+        }
+      },
+      "title": "CommandResult message for returning command execution results"
+    },
+    "v1CommandResultStatus": {
+      "type": "string",
+      "enum": [
+        "SUCCESS",
+        "FAILURE"
+      ],
+      "default": "SUCCESS",
+      "title": "Status of the command execution"
     },
     "v1CreateTaskResponse": {
       "type": "object",
@@ -84,6 +110,16 @@
       },
       "title": "Message for Task history response"
     },
+    "v1Heartbeat": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "title": "Timestamp of the heartbeat, in ISO 8601 format (UTC)"
+        }
+      },
+      "title": "Heartbeat message for keeping the connection alive"
+    },
     "v1Payload": {
       "type": "object",
       "properties": {
@@ -96,6 +132,32 @@
         }
       },
       "title": "Message for Task Payload"
+    },
+    "v1RunCommand": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "title": "Unique identifier for the command"
+        },
+        "command": {
+          "type": "string",
+          "title": "The command to be executed"
+        }
+      },
+      "title": "RunCommand message for executing commands"
+    },
+    "v1StreamResponse": {
+      "type": "object",
+      "properties": {
+        "heartbeat": {
+          "$ref": "#/definitions/v1Heartbeat"
+        },
+        "commandResult": {
+          "$ref": "#/definitions/v1CommandResult"
+        }
+      },
+      "title": "Message for stream responses"
     },
     "v1Task": {
       "type": "object",

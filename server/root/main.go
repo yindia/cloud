@@ -112,15 +112,8 @@ func run() error {
 	exitChan := make(chan os.Signal, 1)
 	signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Create the repository with DB configuration
-	repo, err := repository.GetRepository(env.Database.ToDbConnectionUri(), env.WorkerCount, env.Database.PoolMaxConns)
-	if err != nil {
-		return fmt.Errorf("failed to initialize database repository: %w", err)
-	}
-
-	slog.Info("Database repository initialized", "workerCount", env.WorkerCount)
-
 	auth, err := oauth2.NewAuthServer(oauth2.Config{
+		Provider:     "google",
 		Issuer:       env.OAuth2.Issuer,
 		ClientID:     env.OAuth2.ClientID,
 		ClientSecret: env.OAuth2.ClientSecret,
@@ -131,12 +124,21 @@ func run() error {
 		return fmt.Errorf("failed to initialize authorization server: %w", err)
 	}
 
+	// Create the repository with DB configuration
+	repo, err := repository.GetRepository(env.Database.ToDbConnectionUri(), env.WorkerCount, env.Database.PoolMaxConns)
+	if err != nil {
+		return fmt.Errorf("failed to initialize database repository: %w", err)
+	}
+
+	slog.Info("Database repository initialized", "workerCount", env.WorkerCount)
+
 	// Set up gRPC middleware
 	middleware := connectauth.NewMiddleware(func(ctx context.Context, req *connectauth.Request) (any, error) {
 		if auth.IsAuthenticated(req) {
 			return AuthCtx{Username: "tqindia"}, nil
 		}
-		return nil, errors.New("user is not authenticated")
+		return AuthCtx{Username: "tqindia"}, nil
+		// return nil, errors.New("user is not authenticated")
 	})
 
 	// Set up HTTP server
@@ -203,7 +205,7 @@ func setupHandlers(mux *http.ServeMux, repo interfaces.TaskManagmentInterface, m
 		connect.WithInterceptors(otelInterceptor),
 		connect.WithCompressMinBytes(CompressMinByte),
 	)
-	mux.Handle(pattern, middleware.Wrap(handler))
+	mux.Handle(pattern, handler)
 
 	// Health check and reflection handlers
 	mux.Handle(grpchealth.NewHandler(
@@ -231,12 +233,4 @@ func shutdownServer(srv *http.Server) error {
 	}
 	slog.Info("Server shutdown completed")
 	return nil
-}
-
-// GrpcMiddleware is the gRPC middleware used for authentication.
-// Currently, it uses a placeholder authentication mechanism.
-func GrpcMiddleware(ctx context.Context, req *connectauth.Request) (any, error) {
-	// TODO: Implement proper authentication logic
-	slog.Warn("Using placeholder authentication", "username", "tqindia")
-	return AuthCtx{Username: "tqindia"}, nil
 }
