@@ -1,12 +1,10 @@
 package repositories
 
 import (
-	"database/sql"
 	"fmt"
 	gormimpl "task/server/repository/gormimpl"
 	interfaces "task/server/repository/interface"
 
-	"github.com/riverqueue/river"
 	"gorm.io/gorm"
 )
 
@@ -24,9 +22,9 @@ func (r Postgres) TaskHistoryRepo() interfaces.TaskHistoryRepo {
 	return r.history
 }
 
-func NewPostgresRepo(db *gorm.DB, riverClient *river.Client[*sql.Tx]) interfaces.TaskManagmentInterface {
+func NewPostgresRepo(db *gorm.DB) interfaces.TaskManagmentInterface {
 	return &Postgres{
-		task:    gormimpl.NewTaskRepo(db, riverClient),
-		history: gormimpl.NewTaskHistoryRepo(db, riverClient),
+		task:    gormimpl.NewTaskRepo(db),
+		history: gormimpl.NewTaskHistoryRepo(db),
 	}
 }

@@ -2,16 +2,13 @@ package gormimpl
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/riverqueue/river"
 	"gorm.io/gorm"
 
-	cloudv1 "task/pkg/gen/cloud/v1"
-	"task/pkg/worker"
 	interfaces "task/server/repository/interface"
 	models "task/server/repository/model/task"
 )
@@ -37,8 +34,7 @@ var (
 // TaskRepo implements the TaskRepo interface using GORM for database operations
 // and River for task queue management.
 type TaskRepo struct {
-	db          *gorm.DB
-	riverClient *river.Client[*sql.Tx]
+	db *gorm.DB
 }
 
 // CreateTask creates a new task in the database and enqueues it for processing.
@@ -56,15 +52,6 @@ func (s *TaskRepo) CreateTask(ctx context.Context, task models.Task) (models.Tas
 	if task.ID == 0 {
 		taskOperations.WithLabelValues("create", "error").Inc()
 		return models.Task{}, fmt.Errorf("failed to get task ID after creation")
-	}
-	_, err := s.riverClient.Insert(context.Background(), worker.TaskArgument{
-		Task: task,
-	}, &river.InsertOpts{
-		MaxAttempts: 5,
-	})
-	if err != nil {
-		taskOperations.WithLabelValues("create", "error").Inc()
-		return models.Task{}, fmt.Errorf("failed to enqueue task: %w", err)
 	}
 
 	taskOperations.WithLabelValues("create", "success").Inc()
@@ -95,21 +82,6 @@ func (s *TaskRepo) UpdateTaskStatus(ctx context.Context, taskID uint, status int
 	if err := s.db.Model(&models.Task{}).Where("id = ?", taskID).Update("status", status).Error; err != nil {
 		taskOperations.WithLabelValues("update_status", "error").Inc()
 		return fmt.Errorf("failed to update task status: %w", err)
-	}
-	if status == int(cloudv1.TaskStatusEnum_QUEUED) {
-		task, err := s.GetTaskByID(ctx, taskID)
-		if err != nil {
-			return fmt.Errorf("failed to get task by ID: %w", err)
-		}
-		_, err = s.riverClient.Insert(ctx, worker.TaskArgument{
-			Task: *task,
-		}, &river.InsertOpts{
-			MaxAttempts: 5,
-		})
-		if err != nil {
-			taskOperations.WithLabelValues("update_status", "error").Inc()
-			return fmt.Errorf("failed to enqueue task: %w", err)
-		}
 	}
 
 	taskOperations.WithLabelValues("update_status", "success").Inc()
@@ -175,11 +147,32 @@ func (s *TaskRepo) GetTaskStatusCounts(ctx context.Context) (map[int]int64, erro
 	return counts, nil
 }
 
+// GetStalledTasks retrieves tasks with status "unknown" or "queue" that have been in that state for more than 10 seconds.
+// It returns a slice of tasks and an error if the operation fails.
+func (s *TaskRepo) GetStalledTasks(ctx context.Context) ([]models.Task, error) {
+	timer := prometheus.NewTimer(taskLatency.WithLabelValues("get_stalled"))
+	defer timer.ObserveDuration()
+
+	var tasks []models.Task
+	tenSecondsAgo := time.Now().Add(-60 * time.Second)
+
+	err := s.db.Where("(status = ? OR status = ?) AND updated_at < ?",
+		0, 4, tenSecondsAgo).
+		Find(&tasks).Error
+
+	if err != nil {
+		taskOperations.WithLabelValues("get_stalled", "error").Inc()
+		return nil, fmt.Errorf("failed to retrieve stalled tasks: %w", err)
+	}
+
+	taskOperations.WithLabelValues("get_stalled", "success").Inc()
+	return tasks, nil
+}
+
 // NewTaskRepo creates and returns a new instance of TaskRepo.
 // It requires a GORM database connection and a River client for task queue management.
-func NewTaskRepo(db *gorm.DB, riverClient *river.Client[*sql.Tx]) interfaces.TaskRepo {
+func NewTaskRepo(db *gorm.DB) interfaces.TaskRepo {
 	return &TaskRepo{
-		db:          db,
-		riverClient: riverClient,
+		db: db,
 	}
 }

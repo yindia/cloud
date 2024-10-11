@@ -36,4 +36,6 @@ type TaskRepo interface {
 	// It returns a map where the key is the status code and the value is the count of tasks with that status.
 	// An error is returned if any occurs during the operation.
 	GetTaskStatusCounts(ctx context.Context) (map[int]int64, error)
+
+	GetStalledTasks(ctx context.Context) ([]model.Task, error)
 }

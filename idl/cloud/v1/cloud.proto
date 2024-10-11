@@ -187,7 +187,8 @@ service TaskManagementService {
 message StreamRequest {
     oneof request {
         Heartbeat heartbeat = 1;
-        RunCommand run_command = 2;
+        WorkAssignment work_assignment = 2;
+        UpdateTaskStatusRequest update_task_status = 3;
     }
 }
 
@@ -195,8 +196,18 @@ message StreamRequest {
 message StreamResponse {
     oneof response {
         Heartbeat heartbeat = 1;
-        CommandResult command_result = 2;
+        WorkAssignment work_assignment = 2;
+        UpdateTaskStatusRequest update_task_status = 3;
     }
+}
+
+// Message for work assignments
+message WorkAssignment {
+    // Unique identifier for the assignment
+    int64 assignment_id = 1 ;
+    
+    // The task to be executed
+    Task task = 2 [(validate.rules).message.required = true];
 }
 
 // Heartbeat message for keeping the connection alive
@@ -207,39 +218,6 @@ message Heartbeat {
     }];
 }
 
-// RunCommand message for executing commands
-message RunCommand {
-    // Unique identifier for the command
-    string command_id = 1 [(validate.rules).string = {
-        pattern: "^[a-zA-Z0-9_-]+$",
-        max_len: 255
-    }];
-    
-    // The command to be executed
-    string command = 2 [(validate.rules).string = {
-        min_len: 1,
-        max_len: 1000
-    }];
-}
-
-// CommandResult message for returning command execution results
-message CommandResult {
-    // Unique identifier of the executed command
-    string command_id = 1 [(validate.rules).string = {
-        pattern: "^[a-zA-Z0-9_-]+$",
-        max_len: 255
-    }];
-    
-    // Result of the command execution
-    string result = 2;
-    
-    // Status of the command execution
-    enum Status {
-        SUCCESS = 0;
-        FAILURE = 1;
-    }
-    Status status = 3;
-}
 
 
 // Message for GetStatus request (empty)

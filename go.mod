@@ -20,8 +20,6 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/prometheus/client_golang v1.20.4
 	github.com/riverqueue/river v0.12.1
-	github.com/riverqueue/river/riverdriver/riverdatabasesql v0.12.1
-	github.com/riverqueue/river/rivertype v0.12.1
 	github.com/rs/cors v1.11.1
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
@@ -45,7 +43,6 @@ require (
 	github.com/go-jose/go-jose/v4 v4.0.2 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/cel-go v0.21.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -57,7 +54,6 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -66,6 +62,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/riverqueue/river/riverdriver v0.12.1 // indirect
 	github.com/riverqueue/river/rivershared v0.12.1 // indirect
+	github.com/riverqueue/river/rivertype v0.12.1 // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect

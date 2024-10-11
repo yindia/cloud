@@ -16,6 +16,8 @@ import (
 
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"sync"
+
 	connect "connectrpc.com/connect"
 	"github.com/avast/retry-go/v4"
 	protovalidate "github.com/bufbuild/protovalidate-go"
@@ -38,6 +40,10 @@ type TaskServer struct {
 	logger      *log.Logger
 	validator   *protovalidate.Validator
 	metrics     *taskMetrics
+	channel     chan task.Task
+	stream      *connect.BidiStream[v1.StreamRequest, v1.StreamResponse]
+	workerPool  chan struct{}
+	maxWorkers  int
 }
 
 type taskMetrics struct {
@@ -92,12 +98,20 @@ func NewTaskServer(repo interfaces.TaskManagmentInterface) cloudv1connect.TaskMa
 		log.Fatalf("Failed to initialize validator: %v", err)
 	}
 
+	maxWorkers := 10 // You can make this configurable
 	server := &TaskServer{
 		taskRepo:    repo.TaskRepo(),
 		historyRepo: repo.TaskHistoryRepo(),
 		logger:      log.New(os.Stdout, logPrefix, log.LstdFlags|log.Lshortfile),
 		validator:   validator,
 		metrics:     newTaskMetrics(),
+		workerPool:  make(chan struct{}, maxWorkers),
+		maxWorkers:  maxWorkers,
+	}
+
+	// Initialize the worker pool
+	for i := 0; i < maxWorkers; i++ {
+		server.workerPool <- struct{}{}
 	}
 
 	server.logger.Println("TaskServer initialized successfully")
@@ -125,7 +139,7 @@ func (s *TaskServer) CreateTask(ctx context.Context, req *connect.Request[v1.Cre
 		s.metrics.errorCounter.WithLabelValues("create_task").Inc()
 		return nil, s.logError(err, "Failed to create task in repository")
 	}
-
+	s.channel <- createdTask
 	// Attempt to log task creation history with retries
 	err = retry.Do(
 		func() error {
@@ -289,24 +303,138 @@ func (s *TaskServer) GetStatus(ctx context.Context, req *connect.Request[v1.GetS
 	return connect.NewResponse(response), nil
 }
 
-// GetStatus retrieves the count of tasks for each status.
+// StreamConnection handles bidirectional streaming for task updates and assignments.
 func (s *TaskServer) StreamConnection(ctx context.Context, stream *connect.BidiStream[v1.StreamRequest, v1.StreamResponse]) error {
+	s.stream = stream
+	s.channel = make(chan task.Task, 100) // Buffered channel to prevent blocking
+	defer close(s.channel)
+
+	// Start a goroutine to handle sending work assignments
+	go s.sendWorkAssignments(ctx)
+
+	go s.streamStalledTasks(ctx)
 
 	for {
 		if err := ctx.Err(); err != nil {
+			s.logger.Printf("Context error in StreamConnection: %v", err)
 			return err
 		}
-		request, err := stream.Receive()
-		if err != nil && errors.Is(err, io.EOF) {
-			return nil
-		} else if err != nil {
+
+		req, err := stream.Receive()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				s.logger.Println("Client closed the stream")
+				return nil
+			}
+			s.logger.Printf("Error receiving request: %v", err)
 			return fmt.Errorf("receive request: %w", err)
 		}
-		fmt.Println(request)
-		if err := stream.Send(&v1.StreamResponse{Response: &v1.StreamResponse_Heartbeat{Heartbeat: &v1.Heartbeat{}}}); err != nil {
-			return fmt.Errorf("send response: %w", err)
+
+		if err := s.handleStreamRequest(ctx, req); err != nil {
+			s.logger.Printf("Error handling stream request: %v", err)
+			return err
 		}
 	}
+}
+
+func (s *TaskServer) streamStalledTasks(ctx context.Context) error {
+	// Reconcile the tasks
+	tasks, err := s.taskRepo.GetStalledTasks(ctx)
+	if err != nil {
+		s.logger.Printf("Failed to retrieve stalled tasks: %v", err)
+		s.metrics.errorCounter.WithLabelValues("get_stalled_tasks").Inc()
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to retrieve stalled tasks: %w", err))
+	}
+	// Use a separate goroutine to send tasks to the channel
+	go func() {
+		for _, task := range tasks {
+			select {
+			case s.channel <- task:
+				// Task sent successfully
+			case <-ctx.Done():
+				s.logger.Println("Context cancelled while sending stalled tasks")
+				return
+			}
+		}
+	}()
+	return nil
+}
+
+// sendWorkAssignments sends work assignments to multiple workers
+func (s *TaskServer) sendWorkAssignments(ctx context.Context) {
+	var wg sync.WaitGroup
+	for {
+		select {
+		case <-ctx.Done():
+			wg.Wait() // Wait for all workers to finish before returning
+			return
+		case work := <-s.channel:
+			select {
+			case <-s.workerPool: // Acquire a worker
+				wg.Add(1)
+				go func(t task.Task) {
+					defer wg.Done()
+					defer func() { s.workerPool <- struct{}{} }() // Release the worker
+
+					response := &v1.StreamResponse{
+						Response: &v1.StreamResponse_WorkAssignment{
+							WorkAssignment: &v1.WorkAssignment{
+								AssignmentId: int64(t.ID),
+								Task:         s.convertTaskToProto(&t),
+							},
+						},
+					}
+					err := retry.Do(
+						func() error {
+							return s.stream.Send(response)
+						},
+						retry.Attempts(3),
+						retry.Delay(100*time.Millisecond),
+						retry.DelayType(retry.BackOffDelay),
+						retry.OnRetry(func(n uint, err error) {
+							s.logger.Printf("Retry %d: Error sending work assignment: %v", n+1, err)
+						}),
+					)
+					if err != nil {
+						s.logger.Printf("Failed to send work assignment after retries: %v", err)
+						return
+					}
+				}(work)
+			case <-ctx.Done():
+				wg.Wait() // Wait for all workers to finish before returning
+				return
+			}
+		}
+	}
+}
+
+// handleStreamRequest processes incoming stream requests
+func (s *TaskServer) handleStreamRequest(ctx context.Context, req *v1.StreamRequest) error {
+	switch r := req.Request.(type) {
+	case *v1.StreamRequest_UpdateTaskStatus:
+		return s.handleUpdateTaskStatus(ctx, r.UpdateTaskStatus)
+	case *v1.StreamRequest_Heartbeat:
+		fmt.Println("Heartbeat received")
+	default:
+		s.logger.Printf("Received unknown request type: %T", r)
+		return fmt.Errorf("unknown request type: %T", r)
+	}
+	return nil
+}
+
+// handleUpdateTaskStatus processes task status update requests
+func (s *TaskServer) handleUpdateTaskStatus(ctx context.Context, update *v1.UpdateTaskStatusRequest) error {
+	if err := s.taskRepo.UpdateTaskStatus(ctx, uint(update.Id), int(update.Status)); err != nil {
+		s.metrics.errorCounter.WithLabelValues("update_task_status").Inc()
+		return fmt.Errorf("failed to update task status: id=%d, error: %w", update.Id, err)
+	}
+
+	if err := s.createTaskStatusHistory(ctx, uint(update.Id), int(update.Status), update.Message); err != nil {
+		s.logger.Printf("WARNING: Failed to create task status history: %v", err)
+		// Consider whether to return an error here or continue
+	}
+
+	s.logger.Printf("Task status updated: id=%d, new status=%d", update.Id, update.Status)
 	return nil
 }
 
