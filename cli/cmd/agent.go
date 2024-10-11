@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sync"
 	v1 "task/pkg/gen/cloud/v1"
 	"task/pkg/plugins"
 	"task/pkg/x"
@@ -35,28 +36,63 @@ func runWorkflowOrchestration(ctx context.Context) error {
 	logger := slog.With("component", "workflow_orchestration")
 	logger.Info("Starting workflow orchestration server")
 
+	// Create a cancelable context for graceful shutdown
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Create a WaitGroup to wait for all goroutines to finish
+	var wg sync.WaitGroup
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("Shutting down gracefully...")
+			wg.Wait()
+			logger.Info("Workflow orchestration server stopped")
+			return nil
+		default:
+			if err := runStreamConnection(ctx, &wg, logger); err != nil {
+				logger.Error("Stream connection error", "error", err)
+				time.Sleep(5 * time.Second) // Wait before retrying
+				continue
+			}
+		}
+	}
+}
+
+func runStreamConnection(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger) error {
 	conn, err := grpc.Dial("localhost:8080", grpc.WithInsecure())
 	if err != nil {
-		logger.Error("Failed to connect to gRPC server", "error", err)
 		return fmt.Errorf("failed to connect to gRPC server: %w", err)
 	}
 	defer conn.Close()
 
 	client := v1.NewTaskManagementServiceClient(conn)
 
+	// Create a buffered channel for work assignments
+	workChan := make(chan *v1.StreamResponse_WorkAssignment, 100)
+
+	// Start the stream
 	stream, err := client.StreamConnection(ctx)
 	if err != nil {
-		logger.Error("Failed to start stream", "error", err)
 		return fmt.Errorf("failed to start stream: %w", err)
 	}
 
-	go sendPeriodicRequests(ctx, stream, logger)
+	// Start goroutines
+	wg.Add(3)
+	go sendPeriodicRequests(ctx, stream, logger, wg)
+	go receiveResponses(ctx, stream, workChan, logger, wg)
+	go processWorkAssignments(ctx, stream, workChan, logger, wg)
 
-	return receiveAndProcessResponses(ctx, stream, logger)
+	// Wait for all goroutines to finish
+	wg.Wait()
+
+	return nil
 }
 
 // sendPeriodicRequests sends periodic RunCommand requests to the server.
-func sendPeriodicRequests(ctx context.Context, stream v1.TaskManagementService_StreamConnectionClient, logger *slog.Logger) {
+func sendPeriodicRequests(ctx context.Context, stream v1.TaskManagementService_StreamConnectionClient, logger *slog.Logger, wg *sync.WaitGroup) {
+	defer wg.Done()
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -74,41 +110,78 @@ func sendPeriodicRequests(ctx context.Context, stream v1.TaskManagementService_S
 	}
 }
 
-// receiveAndProcessResponses continuously receives and processes responses from the server.
-func receiveAndProcessResponses(ctx context.Context, stream v1.TaskManagementService_StreamConnectionClient, logger *slog.Logger) error {
+func receiveResponses(ctx context.Context, stream v1.TaskManagementService_StreamConnectionClient, workChan chan<- *v1.StreamResponse_WorkAssignment, logger *slog.Logger, wg *sync.WaitGroup) {
+	defer wg.Done()
 	for {
-		response, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF || ctx.Err() != nil {
-				logger.Info("Stream closed")
-				return nil
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			response, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF || ctx.Err() != nil {
+					logger.Info("Stream closed")
+					return
+				}
+				logger.Error("Error receiving response", "error", err)
+				time.Sleep(time.Second) // Wait before retrying
+				continue
 			}
-			logger.Error("Error receiving response", "error", err)
-			return fmt.Errorf("error receiving response: %w", err)
+			fmt.Println(response)
+			switch resp := response.Response.(type) {
+			case *v1.StreamResponse_WorkAssignment:
+				select {
+				case workChan <- resp:
+					logger.Debug("Work assignment queued", "task_id", resp.WorkAssignment.Task.Id)
+				default:
+					logger.Warn("Work channel full, discarding work assignment", "task_id", resp.WorkAssignment.Task.Id)
+				}
+			default:
+				logger.Warn("Received unknown response type", "type", fmt.Sprintf("%T", resp))
+			}
 		}
+	}
+}
 
-		switch resp := response.Response.(type) {
-		case *v1.StreamResponse_WorkAssignment:
-			status, message, err := processWorkflowUpdate(ctx, resp, logger)
+func processWorkAssignments(ctx context.Context, stream v1.TaskManagementService_StreamConnectionClient, workChan <-chan *v1.StreamResponse_WorkAssignment, logger *slog.Logger, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case work := <-workChan:
+			status, message, err := processWorkflowUpdate(ctx, work, logger)
 			if err != nil {
 				logger.Error("Error processing workflow update", "error", err)
 			}
-			// Send status update through the stream
-			if err := stream.Send(&v1.StreamRequest{
-				Request: &v1.StreamRequest_UpdateTaskStatus{
-					UpdateTaskStatus: &v1.UpdateTaskStatusRequest{
-						Id:      resp.WorkAssignment.Task.Id,
-						Status:  status,
-						Message: message,
-					},
-				},
-			}); err != nil {
-				logger.Error("Failed to send status update", "error", err)
+			// Send status update through the stream with retries
+			if err := sendStatusUpdateWithRetry(ctx, stream, work.WorkAssignment.Task.Id, status, message); err != nil {
+				logger.Error("Failed to send status update after retries", "error", err)
 			}
-		default:
-			logger.Warn("Received unknown response type", "type", fmt.Sprintf("%T", resp))
 		}
 	}
+}
+
+func sendStatusUpdateWithRetry(ctx context.Context, stream v1.TaskManagementService_StreamConnectionClient, taskID int32, status v1.TaskStatusEnum, message string) error {
+	maxRetries := 5
+	for i := 0; i < maxRetries; i++ {
+		err := stream.Send(&v1.StreamRequest{
+			Request: &v1.StreamRequest_UpdateTaskStatus{
+				UpdateTaskStatus: &v1.UpdateTaskStatusRequest{
+					Id:      taskID,
+					Status:  status,
+					Message: message,
+				},
+			},
+		})
+		if err == nil {
+			return nil
+		}
+		if i < maxRetries-1 {
+			time.Sleep(time.Duration(i+1) * time.Second)
+		}
+	}
+	return fmt.Errorf("failed to send status update after %d retries", maxRetries)
 }
 
 // processWorkflowUpdate handles different types of responses and returns the workflow state.

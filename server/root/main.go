@@ -204,6 +204,8 @@ func setupHandlers(mux *http.ServeMux, repo interfaces.TaskManagmentInterface, m
 		route.NewTaskServer(repo),
 		connect.WithInterceptors(otelInterceptor),
 		connect.WithCompressMinBytes(CompressMinByte),
+		connect.WithSendMaxBytes(1024*1024*1024),
+		connect.WithReadMaxBytes(1024*1024*1024),
 	)
 	mux.Handle(pattern, handler)
 

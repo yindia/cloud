@@ -18,6 +18,8 @@ import (
 
 	"sync"
 
+	"strings"
+
 	connect "connectrpc.com/connect"
 	"github.com/avast/retry-go/v4"
 	protovalidate "github.com/bufbuild/protovalidate-go"
@@ -386,7 +388,13 @@ func (s *TaskServer) sendWorkAssignments(ctx context.Context) {
 					}
 					err := retry.Do(
 						func() error {
-							return s.stream.Send(response)
+							if err := s.stream.Send(response); err != nil {
+								if errors.Is(err, io.EOF) || strings.Contains(err.Error(), "write envelope: short write") {
+									return retry.Unrecoverable(err)
+								}
+								return err
+							}
+							return nil
 						},
 						retry.Attempts(3),
 						retry.Delay(100*time.Millisecond),
@@ -396,8 +404,13 @@ func (s *TaskServer) sendWorkAssignments(ctx context.Context) {
 						}),
 					)
 					if err != nil {
+						if errors.Is(err, io.EOF) || strings.Contains(err.Error(), "write envelope: short write") {
+							s.logger.Printf("Client disconnected, stopping work assignment: %v", err)
+							// Consider re-queueing the task or updating its status
+							return
+						}
 						s.logger.Printf("Failed to send work assignment after retries: %v", err)
-						return
+						// Consider re-queueing the task or updating its status
 					}
 				}(work)
 			case <-ctx.Done():
