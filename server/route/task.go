@@ -23,6 +23,8 @@ import (
 	connect "connectrpc.com/connect"
 	"github.com/avast/retry-go/v4"
 	protovalidate "github.com/bufbuild/protovalidate-go"
+	"github.com/google/uuid"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -37,15 +39,17 @@ const (
 // TaskServer represents the server handling task-related requests.
 // It implements the cloudv1connect.TaskManagementServiceHandler interface.
 type TaskServer struct {
-	taskRepo    interfaces.TaskRepo
-	historyRepo interfaces.TaskHistoryRepo
-	logger      *log.Logger
-	validator   *protovalidate.Validator
-	metrics     *taskMetrics
-	channel     chan task.Task
-	stream      *connect.BidiStream[v1.StreamRequest, v1.StreamResponse]
-	workerPool  chan struct{}
-	maxWorkers  int
+	taskRepo         interfaces.TaskRepo
+	historyRepo      interfaces.TaskHistoryRepo
+	logger           *log.Logger
+	validator        *protovalidate.Validator
+	metrics          *taskMetrics
+	channel          chan task.Task
+	stream           *connect.BidiStream[v1.StreamRequest, v1.StreamResponse]
+	workerPool       chan struct{}
+	maxWorkers       int
+	clientHeartbeats sync.Map
+	heartbeatTimeout time.Duration
 }
 
 type taskMetrics struct {
@@ -102,13 +106,15 @@ func NewTaskServer(repo interfaces.TaskManagmentInterface) cloudv1connect.TaskMa
 
 	maxWorkers := 10 // You can make this configurable
 	server := &TaskServer{
-		taskRepo:    repo.TaskRepo(),
-		historyRepo: repo.TaskHistoryRepo(),
-		logger:      log.New(os.Stdout, logPrefix, log.LstdFlags|log.Lshortfile),
-		validator:   validator,
-		metrics:     newTaskMetrics(),
-		workerPool:  make(chan struct{}, maxWorkers),
-		maxWorkers:  maxWorkers,
+		taskRepo:         repo.TaskRepo(),
+		historyRepo:      repo.TaskHistoryRepo(),
+		logger:           log.New(os.Stdout, logPrefix, log.LstdFlags|log.Lshortfile),
+		validator:        validator,
+		metrics:          newTaskMetrics(),
+		channel:          make(chan task.Task, 500),
+		workerPool:       make(chan struct{}, maxWorkers),
+		maxWorkers:       maxWorkers,
+		heartbeatTimeout: 30 * time.Second, // Configurable timeout
 	}
 
 	// Initialize the worker pool
@@ -142,23 +148,6 @@ func (s *TaskServer) CreateTask(ctx context.Context, req *connect.Request[v1.Cre
 		return nil, s.logError(err, "Failed to create task in repository")
 	}
 	s.channel <- createdTask
-	// Attempt to log task creation history with retries
-	err = retry.Do(
-		func() error {
-			return s.logTaskCreationHistory(ctx, createdTask.ID)
-		},
-		retry.Attempts(3),
-		retry.Delay(100*time.Millisecond),
-		retry.DelayType(retry.BackOffDelay),
-		retry.OnRetry(func(n uint, err error) {
-			s.logger.Printf("Retry %d: Failed to create task status history: %v", n, err)
-		}),
-	)
-
-	if err != nil {
-		s.logger.Printf("WARNING: Failed to create task status history after retries: %v", err)
-		// Consider whether to return an error here or continue
-	}
 
 	s.logger.Printf("Task created successfully: id=%d", createdTask.ID)
 	return connect.NewResponse(&v1.CreateTaskResponse{Id: int32(createdTask.ID)}), nil
@@ -308,17 +297,23 @@ func (s *TaskServer) GetStatus(ctx context.Context, req *connect.Request[v1.GetS
 // StreamConnection handles bidirectional streaming for task updates and assignments.
 func (s *TaskServer) StreamConnection(ctx context.Context, stream *connect.BidiStream[v1.StreamRequest, v1.StreamResponse]) error {
 	s.stream = stream
-	s.channel = make(chan task.Task, 100) // Buffered channel to prevent blocking
 	defer close(s.channel)
 
+	clientID := generateClientID() // Implement this function to generate a unique client ID
+	s.clientHeartbeats.Store(clientID, time.Now())
+
 	// Start a goroutine to handle sending work assignments
-	go s.sendWorkAssignments(ctx)
+	go s.sendWorkAssignments(ctx, clientID)
 
 	go s.streamStalledTasks(ctx)
+
+	// Start a goroutine to check for stale clients
+	go s.checkStaleClients(ctx)
 
 	for {
 		if err := ctx.Err(); err != nil {
 			s.logger.Printf("Context error in StreamConnection: %v", err)
+			s.clientHeartbeats.Delete(clientID)
 			return err
 		}
 
@@ -326,14 +321,17 @@ func (s *TaskServer) StreamConnection(ctx context.Context, stream *connect.BidiS
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				s.logger.Println("Client closed the stream")
+				s.clientHeartbeats.Delete(clientID)
 				return nil
 			}
 			s.logger.Printf("Error receiving request: %v", err)
+			s.clientHeartbeats.Delete(clientID)
 			return fmt.Errorf("receive request: %w", err)
 		}
 
-		if err := s.handleStreamRequest(ctx, req); err != nil {
+		if err := s.handleStreamRequest(ctx, req, clientID); err != nil {
 			s.logger.Printf("Error handling stream request: %v", err)
+			s.clientHeartbeats.Delete(clientID)
 			return err
 		}
 	}
@@ -363,7 +361,7 @@ func (s *TaskServer) streamStalledTasks(ctx context.Context) error {
 }
 
 // sendWorkAssignments sends work assignments to multiple workers
-func (s *TaskServer) sendWorkAssignments(ctx context.Context) {
+func (s *TaskServer) sendWorkAssignments(ctx context.Context, clientID string) {
 	var wg sync.WaitGroup
 	for {
 		select {
@@ -371,13 +369,28 @@ func (s *TaskServer) sendWorkAssignments(ctx context.Context) {
 			wg.Wait() // Wait for all workers to finish before returning
 			return
 		case work := <-s.channel:
+			// Check if the client is still active before sending work
+			if _, ok := s.clientHeartbeats.Load(clientID); !ok {
+				s.logger.Printf("Client %s is no longer active, requeueing work", clientID)
+				s.requeueTask(ctx, work)
+				continue
+			}
+
 			select {
 			case <-s.workerPool: // Acquire a worker
 				wg.Add(1)
 				go func(t task.Task) {
 					defer wg.Done()
 					defer func() { s.workerPool <- struct{}{} }() // Release the worker
+					err := s.taskRepo.UpdateTaskStatus(ctx, t.ID, int(v1.TaskStatusEnum_QUEUED))
+					if err != nil {
+						s.logger.Printf("Failed to update task status to QUEUED: %v", err)
+					}
 
+					if err := s.createTaskStatusHistory(ctx, t.ID, int(v1.TaskStatusEnum_QUEUED), "Task is queued suucessfully"); err != nil {
+						s.logger.Printf("WARNING: Failed to create task status history: %v", err)
+						// Consider whether to return an error here or continue
+					}
 					response := &v1.StreamResponse{
 						Response: &v1.StreamResponse_WorkAssignment{
 							WorkAssignment: &v1.WorkAssignment{
@@ -386,9 +399,10 @@ func (s *TaskServer) sendWorkAssignments(ctx context.Context) {
 							},
 						},
 					}
-					err := retry.Do(
+					err = retry.Do(
 						func() error {
 							if err := s.stream.Send(response); err != nil {
+
 								if errors.Is(err, io.EOF) || strings.Contains(err.Error(), "write envelope: short write") {
 									return retry.Unrecoverable(err)
 								}
@@ -404,13 +418,8 @@ func (s *TaskServer) sendWorkAssignments(ctx context.Context) {
 						}),
 					)
 					if err != nil {
-						if errors.Is(err, io.EOF) || strings.Contains(err.Error(), "write envelope: short write") {
-							s.logger.Printf("Client disconnected, stopping work assignment: %v", err)
-							// Consider re-queueing the task or updating its status
-							return
-						}
 						s.logger.Printf("Failed to send work assignment after retries: %v", err)
-						// Consider re-queueing the task or updating its status
+						s.requeueTask(ctx, t)
 					}
 				}(work)
 			case <-ctx.Done():
@@ -421,13 +430,28 @@ func (s *TaskServer) sendWorkAssignments(ctx context.Context) {
 	}
 }
 
+// requeueTask attempts to requeue a task back into the channel
+func (s *TaskServer) requeueTask(ctx context.Context, t task.Task) {
+	select {
+	case s.channel <- t:
+		s.logger.Printf("Requeued task ID %d", t.ID)
+	case <-ctx.Done():
+		s.logger.Printf("Context cancelled while requeueing task ID %d", t.ID)
+	default:
+		// If the channel is full, log the error and consider other options
+		s.logger.Printf("ERROR: Channel full, unable to requeue task ID %d", t.ID)
+		// Consider persisting this task or implementing a backup queue
+	}
+}
+
 // handleStreamRequest processes incoming stream requests
-func (s *TaskServer) handleStreamRequest(ctx context.Context, req *v1.StreamRequest) error {
+func (s *TaskServer) handleStreamRequest(ctx context.Context, req *v1.StreamRequest, clientID string) error {
 	switch r := req.Request.(type) {
 	case *v1.StreamRequest_UpdateTaskStatus:
 		return s.handleUpdateTaskStatus(ctx, r.UpdateTaskStatus)
 	case *v1.StreamRequest_Heartbeat:
-		fmt.Println("Heartbeat received")
+		s.handleHeartbeat(clientID)
+		s.logger.Printf("Heartbeat received from client: %s", clientID)
 	default:
 		s.logger.Printf("Received unknown request type: %T", r)
 		return fmt.Errorf("unknown request type: %T", r)
@@ -488,7 +512,7 @@ func (s *TaskServer) prepareNewTask(req *v1.CreateTaskRequest) task.Task {
 
 	newTask := task.Task{
 		Name:        req.Name,
-		Status:      int(v1.TaskStatusEnum_QUEUED),
+		Status:      int(v1.TaskStatusEnum_UNKNOWN),
 		Description: req.Description,
 		Type:        req.Type,
 		Payload:     payloadJSON,
@@ -555,4 +579,37 @@ func (s *TaskServer) convertTaskHistoryToProto(history []task.TaskHistory) []*v1
 		}
 	}
 	return protoHistory
+}
+
+// handleHeartbeat updates the last heartbeat time for a client
+func (s *TaskServer) handleHeartbeat(clientID string) {
+	s.clientHeartbeats.Store(clientID, time.Now())
+}
+
+// checkStaleClients periodically checks for clients that haven't sent a heartbeat
+func (s *TaskServer) checkStaleClients(ctx context.Context) {
+	ticker := time.NewTicker(s.heartbeatTimeout / 2)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			s.clientHeartbeats.Range(func(key, value interface{}) bool {
+				clientID := key.(string)
+				lastHeartbeat := value.(time.Time)
+				if now.Sub(lastHeartbeat) > s.heartbeatTimeout {
+					s.logger.Printf("Client %s is stale, removing", clientID)
+					s.clientHeartbeats.Delete(clientID)
+				}
+				return true
+			})
+		}
+	}
+}
+
+func generateClientID() string {
+	return fmt.Sprintf("client-%s", uuid.New().String())
 }

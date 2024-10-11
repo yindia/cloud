@@ -37,7 +37,7 @@ func (t *Task) BeforeCreate(tx *gorm.DB) (err error) {
 	}
 
 	// Ensure task status is valid
-	if t.Status > 3 {
+	if t.Status > 4 {
 		return errors.New("invalid task status")
 	}
 

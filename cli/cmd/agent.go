@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"sync"
 	v1 "task/pkg/gen/cloud/v1"
 	"task/pkg/plugins"
@@ -61,7 +62,15 @@ func runWorkflowOrchestration(ctx context.Context) error {
 }
 
 func runStreamConnection(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger) error {
-	conn, err := grpc.Dial("localhost:8080", grpc.WithInsecure())
+	conn, err := grpc.Dial("localhost:8080", []grpc.DialOption{
+		grpc.WithInsecure(),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(math.MaxInt64),
+			grpc.MaxCallSendMsgSize(math.MaxInt64),
+		),
+		grpc.WithInitialWindowSize(math.MaxInt32),
+		grpc.WithInitialConnWindowSize(math.MaxInt32),
+	}...)
 	if err != nil {
 		return fmt.Errorf("failed to connect to gRPC server: %w", err)
 	}
@@ -150,13 +159,50 @@ func processWorkAssignments(ctx context.Context, stream v1.TaskManagementService
 		case <-ctx.Done():
 			return
 		case work := <-workChan:
-			status, message, err := processWorkflowUpdate(ctx, work, logger)
-			if err != nil {
-				logger.Error("Error processing workflow update", "error", err)
+			maxAttempts := 3
+			initialBackoff := 1 * time.Second
+
+			var finalStatus v1.TaskStatusEnum
+			var finalMessage string
+
+			for attempt := 1; attempt <= maxAttempts; attempt++ {
+				// Update status to Running for each attempt
+
+				runningMessage := fmt.Sprintf("Running attempt %d of %d", attempt, maxAttempts)
+				if err := sendStatusUpdateWithRetry(ctx, stream, work.WorkAssignment.Task.Id, v1.TaskStatusEnum_RUNNING, runningMessage); err != nil {
+					logger.Error("Failed to send running status update", "error", err, "task_id", work.WorkAssignment.Task.Id, "attempt", attempt)
+				}
+
+				_, message, err := processWorkflowUpdate(ctx, work, logger)
+
+				if err != nil {
+					failedMessage := fmt.Sprintf("Attempt %d failed: %v", attempt, err)
+					if err := sendStatusUpdateWithRetry(ctx, stream, work.WorkAssignment.Task.Id, v1.TaskStatusEnum_FAILED, failedMessage); err != nil {
+						logger.Error("Failed to send failed status update", "error", err, "task_id", work.WorkAssignment.Task.Id, "attempt", attempt)
+					}
+
+					if attempt == maxAttempts {
+						finalStatus = v1.TaskStatusEnum_FAILED
+						finalMessage = fmt.Sprintf("All %d attempts failed. Last error: %v", maxAttempts, err)
+					} else {
+						// Wait before the next attempt
+						select {
+						case <-ctx.Done():
+							return
+						case <-time.After(initialBackoff * time.Duration(1<<uint(attempt-1))):
+						}
+						continue
+					}
+				} else {
+					finalStatus = v1.TaskStatusEnum_SUCCEEDED
+					finalMessage = fmt.Sprintf("Task completed successfully on attempt %d: %s", attempt, message)
+					break
+				}
 			}
-			// Send status update through the stream with retries
-			if err := sendStatusUpdateWithRetry(ctx, stream, work.WorkAssignment.Task.Id, status, message); err != nil {
-				logger.Error("Failed to send status update after retries", "error", err)
+
+			// Send final status update
+			if err := sendStatusUpdateWithRetry(ctx, stream, work.WorkAssignment.Task.Id, finalStatus, finalMessage); err != nil {
+				logger.Error("Failed to send final status update", "error", err, "task_id", work.WorkAssignment.Task.Id)
 			}
 		}
 	}
@@ -208,36 +254,36 @@ func processWorkflowUpdate(ctx context.Context, work *v1.StreamResponse_WorkAssi
 		return v1.TaskStatusEnum_FAILED, fmt.Sprintf("Failed to create plugin: %v", err), err
 	}
 
-	if err := plugin.Run(response.Task.Payload.Parameters); err != nil {
-		return v1.TaskStatusEnum_FAILED, fmt.Sprintf("Error running task: %v", err), err
+	// Add retry logic for running the task
+	runErr := plugin.Run(response.Task.Payload.Parameters)
+
+	if runErr != nil {
+		return v1.TaskStatusEnum_FAILED, fmt.Sprintf("Error running task after %d attempts: %v"), runErr
 	}
 
 	logger.Info("Task completed successfully")
-	if err := updateTaskStatus(ctx, int64(response.Task.Id), v1.TaskStatusEnum_SUCCEEDED, "Task completed successfully"); err != nil {
-		logger.Error("Failed to update task status to SUCCEEDED", "error", err)
-		return v1.TaskStatusEnum_FAILED, fmt.Sprintf("Failed to update task status to SUCCEEDED: %v", err), err
-	}
 
-	return v1.TaskStatusEnum_SUCCEEDED, "", nil
+	return v1.TaskStatusEnum_SUCCEEDED, "Task completed successfully", nil
 }
 
-// handlePanic recovers from panics and updates the task status accordingly.
-func handlePanic(ctx context.Context, taskID int32, logger *slog.Logger) {
-	if r := recover(); r != nil {
-		logger.Error("Task panicked", "panic", r)
-		if err := updateTaskStatus(ctx, int64(taskID), v1.TaskStatusEnum_FAILED, fmt.Sprintf("Task panicked: %v", r)); err != nil {
-			logger.Error("Failed to update task status after panic", "error", err)
+// retry is a helper function to retry operations with exponential backoff
+func retry(ctx context.Context, maxAttempts int, initialBackoff time.Duration, operation func() error) error {
+	var err error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		err = operation()
+		if err == nil {
+			return nil
+		}
+		if attempt == maxAttempts-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(initialBackoff * time.Duration(1<<uint(attempt))):
 		}
 	}
-}
-
-// handleError updates the task status to FAILED and logs the error.
-func handleError(ctx context.Context, taskID int32, logger *slog.Logger, message string, err error) error {
-	logger.Error(message, "error", err)
-	if updateErr := updateTaskStatus(ctx, int64(taskID), v1.TaskStatusEnum_FAILED, fmt.Sprintf("%s: %v", message, err)); updateErr != nil {
-		logger.Error("Failed to update task status to FAILED", "error", updateErr)
-	}
-	return fmt.Errorf("%s: %w", message, err)
+	return fmt.Errorf("operation failed after %d attempts: %w", maxAttempts, err)
 }
 
 // updateTaskStatus updates the status of a task using the Task Management Service.

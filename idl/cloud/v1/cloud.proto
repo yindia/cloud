@@ -195,7 +195,6 @@ message StreamRequest {
 // Message for stream responses
 message StreamResponse {
     oneof response {
-        Heartbeat heartbeat = 1;
         WorkAssignment work_assignment = 2;
         UpdateTaskStatusRequest update_task_status = 3;
     }

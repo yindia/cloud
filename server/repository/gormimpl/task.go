@@ -154,10 +154,10 @@ func (s *TaskRepo) GetStalledTasks(ctx context.Context) ([]models.Task, error) {
 	defer timer.ObserveDuration()
 
 	var tasks []models.Task
-	tenSecondsAgo := time.Now().Add(-60 * time.Second)
+	tenSecondsAgo := time.Now().Add(-30 * time.Second)
 
-	err := s.db.Where("(status = ? OR status = ?) AND updated_at < ?",
-		0, 4, tenSecondsAgo).
+	err := s.db.Where("(status = ?) AND updated_at < ?",
+		4, tenSecondsAgo).
 		Find(&tasks).Error
 
 	if err != nil {

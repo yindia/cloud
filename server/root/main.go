@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,14 +19,15 @@ import (
 	"task/server/route"                           // Import route package
 	oauth2 "task/server/route/oauth2"
 
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
+
 	"connectrpc.com/connect"
 	"connectrpc.com/grpchealth"
 	"connectrpc.com/grpcreflect"
 	"connectrpc.com/otelconnect"
 	"github.com/rs/cors"
 	"go.akshayshah.org/connectauth"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -204,8 +206,8 @@ func setupHandlers(mux *http.ServeMux, repo interfaces.TaskManagmentInterface, m
 		route.NewTaskServer(repo),
 		connect.WithInterceptors(otelInterceptor),
 		connect.WithCompressMinBytes(CompressMinByte),
-		connect.WithSendMaxBytes(1024*1024*1024),
-		connect.WithReadMaxBytes(1024*1024*1024),
+		connect.WithSendMaxBytes(math.MaxInt32),
+		connect.WithReadMaxBytes(math.MaxInt32),
 	)
 	mux.Handle(pattern, handler)
 
