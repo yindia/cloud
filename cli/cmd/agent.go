@@ -3,18 +3,17 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
-	"math"
+	"net/http"
 	"sync"
 	v1 "task/pkg/gen/cloud/v1"
+	"task/pkg/gen/cloud/v1/cloudv1connect"
 	"task/pkg/plugins"
 	"task/pkg/x"
 	"time"
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 )
 
 var serveCmd = &cobra.Command{
@@ -27,6 +26,9 @@ var serveCmd = &cobra.Command{
 		return runWorkflowOrchestration(cmd.Context())
 	},
 }
+
+// Number of worker goroutines
+var numWorkers = 1000
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
@@ -62,177 +64,104 @@ func runWorkflowOrchestration(ctx context.Context) error {
 }
 
 func runStreamConnection(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger) error {
-	conn, err := grpc.Dial("localhost:8080", []grpc.DialOption{
-		grpc.WithInsecure(),
-		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(math.MaxInt64),
-			grpc.MaxCallSendMsgSize(math.MaxInt64),
-		),
-		grpc.WithInitialWindowSize(math.MaxInt32),
-		grpc.WithInitialConnWindowSize(math.MaxInt32),
-	}...)
-	if err != nil {
-		return fmt.Errorf("failed to connect to gRPC server: %w", err)
-	}
-	defer conn.Close()
 
-	client := v1.NewTaskManagementServiceClient(conn)
+	var err error
 
-	// Create a buffered channel for work assignments
-	workChan := make(chan *v1.StreamResponse_WorkAssignment, 100)
+	client := cloudv1connect.NewTaskManagementServiceClient(http.DefaultClient, "http://localhost:8080")
 
-	// Start the stream
-	stream, err := client.StreamConnection(ctx)
+	go sendPeriodicRequests(ctx, logger, client) // Pass stream as a pointer
+
+	stream, err := client.PullEvents(ctx, connect.NewRequest(&v1.PullEventsRequest{}))
 	if err != nil {
 		return fmt.Errorf("failed to start stream: %w", err)
 	}
 
-	// Start goroutines
-	wg.Add(3)
-	go sendPeriodicRequests(ctx, stream, logger, wg)
-	go receiveResponses(ctx, stream, workChan, logger, wg)
-	go processWorkAssignments(ctx, stream, workChan, logger, wg)
+	for {
+		ok := stream.Receive()
+		if !ok {
+			return fmt.Errorf("failed to receive response: %w", err)
+		}
 
-	// Wait for all goroutines to finish
-	wg.Wait()
+		go processWork(ctx, stream.Msg(), logger)
+	}
 
 	return nil
 }
 
 // sendPeriodicRequests sends periodic RunCommand requests to the server.
-func sendPeriodicRequests(ctx context.Context, stream v1.TaskManagementService_StreamConnectionClient, logger *slog.Logger, wg *sync.WaitGroup) {
-	defer wg.Done()
+func sendPeriodicRequests(ctx context.Context, logger *slog.Logger, client cloudv1connect.TaskManagementServiceClient) {
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := stream.Send(&v1.StreamRequest{Request: &v1.StreamRequest_Heartbeat{Heartbeat: &v1.Heartbeat{}}}); err != nil {
+			_, err := client.Heartbeat(ctx, connect.NewRequest(&v1.HeartbeatRequest{
+				Timestamp: time.Now().Format(time.RFC3339),
+			}))
+
+			if err != nil {
 				logger.Error("Error sending request", "error", err)
-				return
+				continue
 			}
 			logger.Debug("Sent periodic RunCommand request")
 		}
 	}
 }
 
-func receiveResponses(ctx context.Context, stream v1.TaskManagementService_StreamConnectionClient, workChan chan<- *v1.StreamResponse_WorkAssignment, logger *slog.Logger, wg *sync.WaitGroup) {
-	defer wg.Done()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			response, err := stream.Recv()
-			if err != nil {
-				if err == io.EOF || ctx.Err() != nil {
-					logger.Info("Stream closed")
+func processWork(ctx context.Context, task *v1.PullEventsResponse, logger *slog.Logger) {
+	maxAttempts := 3
+	initialBackoff := 1 * time.Second
+
+	var finalStatus v1.TaskStatusEnum
+	var finalMessage string
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		// Update status to Running for each attempt
+
+		runningMessage := fmt.Sprintf("Running attempt %d of %d", attempt, maxAttempts)
+		if err := updateTaskStatus(ctx, int64(task.Work.Task.Id), v1.TaskStatusEnum_RUNNING, runningMessage); err != nil {
+			logger.Error("Failed to send running status update", "error", err, "task_id", task.Work.Task.Id, "attempt", attempt)
+		}
+
+		_, message, err := processWorkflowUpdate(ctx, task, logger)
+
+		if err != nil {
+			failedMessage := fmt.Sprintf("Attempt %d failed: %v", attempt, err)
+			if err := updateTaskStatus(ctx, int64(task.Work.Task.Id), v1.TaskStatusEnum_FAILED, failedMessage); err != nil {
+				logger.Error("Failed to send failed status update", "error", err, "task_id", task.Work.Task.Id, "attempt", attempt)
+			}
+
+			if attempt == maxAttempts {
+				finalStatus = v1.TaskStatusEnum_FAILED
+				finalMessage = fmt.Sprintf("All %d attempts failed. Last error: %v", maxAttempts, err)
+			} else {
+				// Wait before the next attempt
+				select {
+				case <-ctx.Done():
 					return
+				case <-time.After(initialBackoff * time.Duration(1<<uint(attempt-1))):
 				}
-				logger.Error("Error receiving response", "error", err)
-				time.Sleep(time.Second) // Wait before retrying
 				continue
 			}
-			fmt.Println(response)
-			switch resp := response.Response.(type) {
-			case *v1.StreamResponse_WorkAssignment:
-				select {
-				case workChan <- resp:
-					logger.Debug("Work assignment queued", "task_id", resp.WorkAssignment.Task.Id)
-				default:
-					logger.Warn("Work channel full, discarding work assignment", "task_id", resp.WorkAssignment.Task.Id)
-				}
-			default:
-				logger.Warn("Received unknown response type", "type", fmt.Sprintf("%T", resp))
-			}
+		} else {
+			finalStatus = v1.TaskStatusEnum_SUCCEEDED
+			finalMessage = fmt.Sprintf("Task completed successfully on attempt %d: %s", attempt, message)
+			break
 		}
 	}
-}
 
-func processWorkAssignments(ctx context.Context, stream v1.TaskManagementService_StreamConnectionClient, workChan <-chan *v1.StreamResponse_WorkAssignment, logger *slog.Logger, wg *sync.WaitGroup) {
-	defer wg.Done()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case work := <-workChan:
-			maxAttempts := 3
-			initialBackoff := 1 * time.Second
-
-			var finalStatus v1.TaskStatusEnum
-			var finalMessage string
-
-			for attempt := 1; attempt <= maxAttempts; attempt++ {
-				// Update status to Running for each attempt
-
-				runningMessage := fmt.Sprintf("Running attempt %d of %d", attempt, maxAttempts)
-				if err := sendStatusUpdateWithRetry(ctx, stream, work.WorkAssignment.Task.Id, v1.TaskStatusEnum_RUNNING, runningMessage); err != nil {
-					logger.Error("Failed to send running status update", "error", err, "task_id", work.WorkAssignment.Task.Id, "attempt", attempt)
-				}
-
-				_, message, err := processWorkflowUpdate(ctx, work, logger)
-
-				if err != nil {
-					failedMessage := fmt.Sprintf("Attempt %d failed: %v", attempt, err)
-					if err := sendStatusUpdateWithRetry(ctx, stream, work.WorkAssignment.Task.Id, v1.TaskStatusEnum_FAILED, failedMessage); err != nil {
-						logger.Error("Failed to send failed status update", "error", err, "task_id", work.WorkAssignment.Task.Id, "attempt", attempt)
-					}
-
-					if attempt == maxAttempts {
-						finalStatus = v1.TaskStatusEnum_FAILED
-						finalMessage = fmt.Sprintf("All %d attempts failed. Last error: %v", maxAttempts, err)
-					} else {
-						// Wait before the next attempt
-						select {
-						case <-ctx.Done():
-							return
-						case <-time.After(initialBackoff * time.Duration(1<<uint(attempt-1))):
-						}
-						continue
-					}
-				} else {
-					finalStatus = v1.TaskStatusEnum_SUCCEEDED
-					finalMessage = fmt.Sprintf("Task completed successfully on attempt %d: %s", attempt, message)
-					break
-				}
-			}
-
-			// Send final status update
-			if err := sendStatusUpdateWithRetry(ctx, stream, work.WorkAssignment.Task.Id, finalStatus, finalMessage); err != nil {
-				logger.Error("Failed to send final status update", "error", err, "task_id", work.WorkAssignment.Task.Id)
-			}
-		}
+	// Send final status update
+	if err := updateTaskStatus(ctx, int64(task.Work.Task.Id), finalStatus, finalMessage); err != nil {
+		logger.Error("Failed to send final status update", "error", err, "task_id", task.Work.Task.Id)
 	}
-}
-
-func sendStatusUpdateWithRetry(ctx context.Context, stream v1.TaskManagementService_StreamConnectionClient, taskID int32, status v1.TaskStatusEnum, message string) error {
-	maxRetries := 5
-	for i := 0; i < maxRetries; i++ {
-		err := stream.Send(&v1.StreamRequest{
-			Request: &v1.StreamRequest_UpdateTaskStatus{
-				UpdateTaskStatus: &v1.UpdateTaskStatusRequest{
-					Id:      taskID,
-					Status:  status,
-					Message: message,
-				},
-			},
-		})
-		if err == nil {
-			return nil
-		}
-		if i < maxRetries-1 {
-			time.Sleep(time.Duration(i+1) * time.Second)
-		}
-	}
-	return fmt.Errorf("failed to send status update after %d retries", maxRetries)
 }
 
 // processWorkflowUpdate handles different types of responses and returns the workflow state.
-func processWorkflowUpdate(ctx context.Context, work *v1.StreamResponse_WorkAssignment, logger *slog.Logger) (v1.TaskStatusEnum, string, error) {
-	response := work.WorkAssignment
+func processWorkflowUpdate(ctx context.Context, task *v1.PullEventsResponse, logger *slog.Logger) (v1.TaskStatusEnum, string, error) {
+	response := task.Work
 	logger = logger.With("task_id", response.Task.Id)
 	logger.Info("Received workflow update", "task_type", response.Task.Type)
 

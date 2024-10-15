@@ -154,15 +154,36 @@ func (s *TaskRepo) GetStalledTasks(ctx context.Context) ([]models.Task, error) {
 	defer timer.ObserveDuration()
 
 	var tasks []models.Task
-	tenSecondsAgo := time.Now().Add(-30 * time.Second)
+	thirtySecondsAgo := time.Now().Add(-30 * time.Second)
 
-	err := s.db.Where("(status = ?) AND updated_at < ?",
-		4, tenSecondsAgo).
-		Find(&tasks).Error
+	// Start a transaction
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// Find stalled tasks and lock them for update
+		if err := tx.Set("gorm:query_option", "FOR UPDATE SKIP LOCKED").
+			Where("(status = ?) AND updated_at < ?", 4, thirtySecondsAgo).
+			Find(&tasks).Error; err != nil {
+			return err
+		}
+
+		// Update the status of found tasks to a temporary "processing" state
+		if len(tasks) > 0 {
+			taskIDs := make([]uint, len(tasks))
+			for i, task := range tasks {
+				taskIDs[i] = task.ID
+			}
+			if err := tx.Model(&models.Task{}).
+				Where("id IN ?", taskIDs).
+				Update("status", 5).Error; err != nil { // Assuming 5 is a temporary "processing" status
+				return err
+			}
+		}
+
+		return nil
+	})
 
 	if err != nil {
 		taskOperations.WithLabelValues("get_stalled", "error").Inc()
-		return nil, fmt.Errorf("failed to retrieve stalled tasks: %w", err)
+		return nil, fmt.Errorf("failed to retrieve and lock stalled tasks: %w", err)
 	}
 
 	taskOperations.WithLabelValues("get_stalled", "success").Inc()

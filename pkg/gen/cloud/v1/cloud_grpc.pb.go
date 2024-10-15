@@ -26,7 +26,8 @@ const (
 	TaskManagementService_GetTaskHistory_FullMethodName   = "/cloud.v1.TaskManagementService/GetTaskHistory"
 	TaskManagementService_UpdateTaskStatus_FullMethodName = "/cloud.v1.TaskManagementService/UpdateTaskStatus"
 	TaskManagementService_GetStatus_FullMethodName        = "/cloud.v1.TaskManagementService/GetStatus"
-	TaskManagementService_StreamConnection_FullMethodName = "/cloud.v1.TaskManagementService/StreamConnection"
+	TaskManagementService_Heartbeat_FullMethodName        = "/cloud.v1.TaskManagementService/Heartbeat"
+	TaskManagementService_PullEvents_FullMethodName       = "/cloud.v1.TaskManagementService/PullEvents"
 )
 
 // TaskManagementServiceClient is the client API for TaskManagementService service.
@@ -53,7 +54,8 @@ type TaskManagementServiceClient interface {
 	// Retrieves the count of tasks for each status.
 	// Returns a GetStatusResponse containing a map of status counts.
 	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error)
-	StreamConnection(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[StreamRequest, StreamResponse], error)
+	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+	PullEvents(ctx context.Context, in *PullEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PullEventsResponse], error)
 }
 
 type taskManagementServiceClient struct {
@@ -124,18 +126,34 @@ func (c *taskManagementServiceClient) GetStatus(ctx context.Context, in *GetStat
 	return out, nil
 }
 
-func (c *taskManagementServiceClient) StreamConnection(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[StreamRequest, StreamResponse], error) {
+func (c *taskManagementServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TaskManagementService_ServiceDesc.Streams[0], TaskManagementService_StreamConnection_FullMethodName, cOpts...)
+	out := new(HeartbeatResponse)
+	err := c.cc.Invoke(ctx, TaskManagementService_Heartbeat_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[StreamRequest, StreamResponse]{ClientStream: stream}
+	return out, nil
+}
+
+func (c *taskManagementServiceClient) PullEvents(ctx context.Context, in *PullEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PullEventsResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &TaskManagementService_ServiceDesc.Streams[0], TaskManagementService_PullEvents_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[PullEventsRequest, PullEventsResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskManagementService_StreamConnectionClient = grpc.BidiStreamingClient[StreamRequest, StreamResponse]
+type TaskManagementService_PullEventsClient = grpc.ServerStreamingClient[PullEventsResponse]
 
 // TaskManagementServiceServer is the server API for TaskManagementService service.
 // All implementations must embed UnimplementedTaskManagementServiceServer
@@ -161,7 +179,8 @@ type TaskManagementServiceServer interface {
 	// Retrieves the count of tasks for each status.
 	// Returns a GetStatusResponse containing a map of status counts.
 	GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error)
-	StreamConnection(grpc.BidiStreamingServer[StreamRequest, StreamResponse]) error
+	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
+	PullEvents(*PullEventsRequest, grpc.ServerStreamingServer[PullEventsResponse]) error
 	mustEmbedUnimplementedTaskManagementServiceServer()
 }
 
@@ -190,8 +209,11 @@ func (UnimplementedTaskManagementServiceServer) UpdateTaskStatus(context.Context
 func (UnimplementedTaskManagementServiceServer) GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
 }
-func (UnimplementedTaskManagementServiceServer) StreamConnection(grpc.BidiStreamingServer[StreamRequest, StreamResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method StreamConnection not implemented")
+func (UnimplementedTaskManagementServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Heartbeat not implemented")
+}
+func (UnimplementedTaskManagementServiceServer) PullEvents(*PullEventsRequest, grpc.ServerStreamingServer[PullEventsResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method PullEvents not implemented")
 }
 func (UnimplementedTaskManagementServiceServer) mustEmbedUnimplementedTaskManagementServiceServer() {}
 func (UnimplementedTaskManagementServiceServer) testEmbeddedByValue()                               {}
@@ -322,12 +344,34 @@ func _TaskManagementService_GetStatus_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TaskManagementService_StreamConnection_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TaskManagementServiceServer).StreamConnection(&grpc.GenericServerStream[StreamRequest, StreamResponse]{ServerStream: stream})
+func _TaskManagementService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TaskManagementServiceServer).Heartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TaskManagementService_Heartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TaskManagementServiceServer).Heartbeat(ctx, req.(*HeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TaskManagementService_PullEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(PullEventsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(TaskManagementServiceServer).PullEvents(m, &grpc.GenericServerStream[PullEventsRequest, PullEventsResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TaskManagementService_StreamConnectionServer = grpc.BidiStreamingServer[StreamRequest, StreamResponse]
+type TaskManagementService_PullEventsServer = grpc.ServerStreamingServer[PullEventsResponse]
 
 // TaskManagementService_ServiceDesc is the grpc.ServiceDesc for TaskManagementService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -360,13 +404,16 @@ var TaskManagementService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetStatus",
 			Handler:    _TaskManagementService_GetStatus_Handler,
 		},
+		{
+			MethodName: "Heartbeat",
+			Handler:    _TaskManagementService_Heartbeat_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "StreamConnection",
-			Handler:       _TaskManagementService_StreamConnection_Handler,
+			StreamName:    "PullEvents",
+			Handler:       _TaskManagementService_PullEvents_Handler,
 			ServerStreams: true,
-			ClientStreams: true,
 		},
 	},
 	Metadata: "cloud/v1/cloud.proto",

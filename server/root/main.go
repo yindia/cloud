@@ -163,10 +163,10 @@ func run() error {
 			newCORS().Handler(mux),
 			&http2.Server{},
 		),
-		ReadHeaderTimeout: time.Second,
-		ReadTimeout:       5 * time.Minute,
-		WriteTimeout:      5 * time.Minute,
-		MaxHeaderBytes:    8 * 1024, // 8KiB
+		MaxHeaderBytes:    1 << 20, // 1 MB
+		ReadHeaderTimeout: 60 * time.Minute,
+		ReadTimeout:       60 * time.Minute,
+		WriteTimeout:      60 * time.Minute,
 	}
 
 	// Start the server in a goroutine

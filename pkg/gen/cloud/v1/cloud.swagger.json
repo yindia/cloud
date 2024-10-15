@@ -65,7 +65,7 @@
             "type": "string",
             "format": "int64"
           },
-          "title": "Map of task statuses and their counts"
+          "description": "Map of task statuses and their counts."
         }
       },
       "title": "Message for GetStatus response"
@@ -84,15 +84,9 @@
       },
       "title": "Message for Task history response"
     },
-    "v1Heartbeat": {
+    "v1HeartbeatResponse": {
       "type": "object",
-      "properties": {
-        "timestamp": {
-          "type": "string",
-          "title": "Timestamp of the heartbeat, in ISO 8601 format (UTC)"
-        }
-      },
-      "title": "Heartbeat message for keeping the connection alive"
+      "description": "Response message for the heartbeat request.\n Currently, this message is empty, indicating successful receipt of the heartbeat."
     },
     "v1Payload": {
       "type": "object",
@@ -107,17 +101,12 @@
       },
       "title": "Message for Task Payload"
     },
-    "v1StreamResponse": {
+    "v1PullEventsResponse": {
       "type": "object",
       "properties": {
-        "heartbeat": {
-          "$ref": "#/definitions/v1Heartbeat"
-        },
-        "workAssignment": {
-          "$ref": "#/definitions/v1WorkAssignment"
-        },
-        "updateTaskStatus": {
-          "$ref": "#/definitions/v1UpdateTaskStatusRequest"
+        "work": {
+          "$ref": "#/definitions/v1WorkAssignment",
+          "description": "Work assignment to be executed.\n\nThe task to be executed."
         }
       },
       "title": "Message for stream responses"
@@ -215,27 +204,8 @@
         "ALL"
       ],
       "default": "QUEUED",
-      "description": "- QUEUED: Task is in the queue, waiting to be processed\n - RUNNING: Task is currently being executed\n - FAILED: Task encountered an error and failed to complete\n - SUCCEEDED: Task completed successfully\n - UNKNOWN: Task status cannot be determined\n - ALL: Task status cannot be determined",
+      "description": "- QUEUED: Task is in the queue, waiting to be processed\n - RUNNING: Task is currently being executed\n - FAILED: Task encountered an error and failed to complete\n - SUCCEEDED: Task completed successfully\n - UNKNOWN: Task status cannot be determined\n - ALL: Represents all task statuses",
       "title": "Enum for Task statuses"
-    },
-    "v1UpdateTaskStatusRequest": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "integer",
-          "format": "int32",
-          "description": "Unique identifier for the task. Must be \u003e= 0."
-        },
-        "status": {
-          "$ref": "#/definitions/v1TaskStatusEnum",
-          "description": "New status for the task, must be one of the defined statuses."
-        },
-        "message": {
-          "type": "string",
-          "description": "Additional message about the status update. Maximum length of 2000 characters."
-        }
-      },
-      "title": "Message for Task status update request"
     },
     "v1WorkAssignment": {
       "type": "object",
