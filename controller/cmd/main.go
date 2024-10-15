@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"net/http"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -37,6 +38,7 @@ import (
 
 	taskiov1 "task/api/v1"
 	"task/internal/controller"
+	"task/pkg/gen/cloud/v1/cloudv1connect"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -145,8 +147,9 @@ func main() {
 	}
 
 	if err = (&controller.TaskReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		cloudClient: cloudv1connect.NewTaskManagementServiceClient(http.DefaultClient, "https://localhost:8080"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Task")
 		os.Exit(1)
