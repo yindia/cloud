@@ -23,6 +23,7 @@ type DatabaseConfig struct {
 
 // OAuth2Config holds the OAuth2 configuration
 type OAuth2Config struct {
+	Provider     string `envconfig:"OAUTH2_PROVIDER"`
 	Issuer       string `envconfig:"OAUTH2_ISSUER"`
 	ClientID     string `envconfig:"OAUTH2_CLIENT_ID"`
 	ClientSecret string `envconfig:"OAUTH2_CLIENT_SECRET"`

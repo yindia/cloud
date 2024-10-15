@@ -49,7 +49,7 @@ func NewAuthServer(config Config) (*AuthServer, error) {
 
 	var oauth2Config oauth2.Config
 	var verifier *oidc.IDTokenVerifier
-
+	fmt.Println("config.Provider", config.Provider)
 	switch config.Provider {
 	case "google":
 		oauth2Config = oauth2.Config{
@@ -117,7 +117,7 @@ func (as *AuthServer) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	authURL := as.oauth2Config.AuthCodeURL(as.state, oidc.Nonce(generateState()))
 	as.mu.Unlock()
 
-	json.NewEncoder(w).Encode(map[string]string{"login_url": authURL})
+	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
 // AuthCodeCallbackHandler handles the authorization code callback
@@ -156,24 +156,8 @@ func (as *AuthServer) AuthCodeCallbackHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	as.mu.Lock()
-	session, err := as.sessionStore.Get(r, sessionName)
-	as.mu.Unlock()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	as.mu.Lock()
-	session.Values["id_token"] = rawIDToken
-	session.Values["access_token"] = oauth2Token.AccessToken
-	err = session.Save(r, w)
-	as.mu.Unlock()
-	if err != nil {
-		http.Error(w, "Failed to save session: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	http.Redirect(w, r, "/", http.StatusFound)
+	// http.Redirect(w, r, "/", http.StatusFound)
+	w.Write([]byte(fmt.Sprintf(`{"access_token": "%s"}`, oauth2Token.AccessToken)))
 }
 
 // LogoutHandler handles the logout request

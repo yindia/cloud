@@ -115,11 +115,11 @@ func run() error {
 	signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)
 
 	auth, err := oauth2.NewAuthServer(oauth2.Config{
-		Provider:     "google",
+		Provider:     env.OAuth2.Provider,
 		Issuer:       env.OAuth2.Issuer,
 		ClientID:     env.OAuth2.ClientID,
 		ClientSecret: env.OAuth2.ClientSecret,
-		RedirectURL:  "/authorization-code/callback",
+		RedirectURL:  "http://localhost:8080/authorization-code/callback",
 		SessionKey:   "session",
 	})
 	if err != nil {
@@ -137,10 +137,9 @@ func run() error {
 	// Set up gRPC middleware
 	middleware := connectauth.NewMiddleware(func(ctx context.Context, req *connectauth.Request) (any, error) {
 		if auth.IsAuthenticated(req) {
-			return AuthCtx{Username: "tqindia"}, nil
+			return AuthCtx{}, nil
 		}
-		return AuthCtx{Username: "tqindia"}, nil
-		// return nil, errors.New("user is not authenticated")
+		return nil, errors.New("user is not authenticated") // Updated to return an error for unauthenticated users
 	})
 
 	// Set up HTTP server
@@ -149,9 +148,9 @@ func run() error {
 		return fmt.Errorf("failed to set up handlers: %w", err)
 	}
 
-	http.HandleFunc("/login", auth.LoginHandler)
-	http.HandleFunc("/authorization-code/callback", auth.AuthCodeCallbackHandler)
-	http.HandleFunc("/logout", auth.LogoutHandler)
+	mux.HandleFunc("/login", auth.LoginHandler)
+	mux.HandleFunc("/authorization-code/callback", auth.AuthCodeCallbackHandler)
+	mux.HandleFunc("/logout", auth.LogoutHandler)
 
 	// Add Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
