@@ -36,8 +36,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	taskiov1 "task/api/v1"
-	"task/internal/controller"
+	taskiov1 "task/controller/api/v1"
+	"task/controller/internal/controller"
 	"task/pkg/gen/cloud/v1/cloudv1connect"
 	// +kubebuilder:scaffold:imports
 )
