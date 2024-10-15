@@ -149,10 +149,12 @@ func (s *TaskServer) GetTask(ctx context.Context, req *connect.Request[v1.GetTas
 	s.metrics.getTaskCounter.Inc()
 	s.logger.Printf("Retrieving task: id=%d", req.Msg.Id)
 
+	// Validate the incoming request
 	if err := s.validateRequest(req.Msg); err != nil {
 		return nil, err
 	}
 
+	// Fetch the task from the repository
 	taskResponse, err := s.taskRepo.GetTaskByID(ctx, uint(req.Msg.Id))
 	if err != nil {
 		s.metrics.errorCounter.WithLabelValues("get_task").Inc()
@@ -163,7 +165,7 @@ func (s *TaskServer) GetTask(ctx context.Context, req *connect.Request[v1.GetTas
 	return connect.NewResponse(s.convertTaskToProto(taskResponse)), nil
 }
 
-// GetTaskHistory retrieves the history of a task.
+// GetTaskHistory retrieves the history of a task by its ID.
 func (s *TaskServer) GetTaskHistory(ctx context.Context, req *connect.Request[v1.GetTaskHistoryRequest]) (*connect.Response[v1.GetTaskHistoryResponse], error) {
 	timer := prometheus.NewTimer(s.metrics.taskDuration.WithLabelValues("get_task_history"))
 	defer timer.ObserveDuration()
@@ -171,10 +173,12 @@ func (s *TaskServer) GetTaskHistory(ctx context.Context, req *connect.Request[v1
 	s.metrics.getTaskHistoryCounter.Inc()
 	s.logger.Printf("Retrieving task history: id=%d", req.Msg.Id)
 
+	// Validate the incoming request
 	if err := s.validateRequest(req.Msg); err != nil {
 		return nil, err
 	}
 
+	// Fetch the task history from the repository
 	history, err := s.historyRepo.ListTaskHistories(ctx, uint(req.Msg.Id))
 	if err != nil {
 		s.metrics.errorCounter.WithLabelValues("get_task_history").Inc()
@@ -187,7 +191,7 @@ func (s *TaskServer) GetTaskHistory(ctx context.Context, req *connect.Request[v1
 	return connect.NewResponse(&v1.GetTaskHistoryResponse{History: protoHistory}), nil
 }
 
-// UpdateTaskStatus updates the status of a task.
+// UpdateTaskStatus updates the status of a task and logs the operation.
 func (s *TaskServer) UpdateTaskStatus(ctx context.Context, req *connect.Request[v1.UpdateTaskStatusRequest]) (*connect.Response[emptypb.Empty], error) {
 	timer := prometheus.NewTimer(s.metrics.taskDuration.WithLabelValues("update_task_status"))
 	defer timer.ObserveDuration()
@@ -195,15 +199,18 @@ func (s *TaskServer) UpdateTaskStatus(ctx context.Context, req *connect.Request[
 	s.metrics.updateTaskStatusCounter.Inc()
 	s.logger.Printf("Updating task status: id=%d, status=%s", req.Msg.Id, req.Msg.Status)
 
+	// Validate the incoming request
 	if err := s.validateRequest(req.Msg); err != nil {
 		return nil, err
 	}
 
+	// Update the task status in the repository
 	if err := s.taskRepo.UpdateTaskStatus(ctx, uint(req.Msg.Id), int(req.Msg.Status)); err != nil {
 		s.metrics.errorCounter.WithLabelValues("update_task_status").Inc()
 		return nil, s.logError(err, "Failed to update task status: id=%d", req.Msg.Id)
 	}
 
+	// Log the status update in the task history
 	if err := s.createTaskStatusHistory(ctx, uint(req.Msg.Id), int(req.Msg.Status), req.Msg.Message); err != nil {
 		s.logger.Printf("WARNING: Failed to create task status history: %v", err)
 	}
@@ -212,7 +219,7 @@ func (s *TaskServer) UpdateTaskStatus(ctx context.Context, req *connect.Request[
 	return connect.NewResponse(&emptypb.Empty{}), nil
 }
 
-// ListTasks retrieves a list of tasks.
+// ListTasks retrieves a list of tasks with pagination support.
 func (s *TaskServer) ListTasks(ctx context.Context, req *connect.Request[v1.TaskListRequest]) (*connect.Response[v1.TaskList], error) {
 	timer := prometheus.NewTimer(s.metrics.taskDuration.WithLabelValues("list_tasks"))
 	defer timer.ObserveDuration()
@@ -220,6 +227,7 @@ func (s *TaskServer) ListTasks(ctx context.Context, req *connect.Request[v1.Task
 	s.metrics.listTasksCounter.Inc()
 	s.logger.Print("Retrieving list of tasks")
 
+	// Validate the incoming request
 	if err := s.validateRequest(req.Msg); err != nil {
 		return nil, err
 	}
@@ -236,6 +244,7 @@ func (s *TaskServer) ListTasks(ctx context.Context, req *connect.Request[v1.Task
 		offset = 0 // Default offset
 	}
 
+	// Fetch the list of tasks from the repository
 	tasks, err := s.taskRepo.ListTasks(ctx, limit, offset, int(req.Msg.GetStatus()), req.Msg.GetType())
 	if err != nil {
 		s.metrics.errorCounter.WithLabelValues("list_tasks").Inc()
@@ -259,10 +268,12 @@ func (s *TaskServer) GetStatus(ctx context.Context, req *connect.Request[v1.GetS
 	s.metrics.getTaskCounter.Inc()
 	s.logger.Print("Retrieving task status counts")
 
+	// Validate the incoming request
 	if err := s.validateRequest(req.Msg); err != nil {
 		return nil, err
 	}
 
+	// Fetch the task status counts from the repository
 	statusCounts, err := s.taskRepo.GetTaskStatusCounts(ctx)
 	if err != nil {
 		s.metrics.errorCounter.WithLabelValues("get_status").Inc()
@@ -281,13 +292,13 @@ func (s *TaskServer) GetStatus(ctx context.Context, req *connect.Request[v1.GetS
 	return connect.NewResponse(response), nil
 }
 
-// StreamConnection handles bidirectional streaming for task updates and assignments.
+// Heartbeat handles client heartbeats to maintain connection status.
 func (s *TaskServer) Heartbeat(ctx context.Context, req *connect.Request[v1.HeartbeatRequest]) (*connect.Response[v1.HeartbeatResponse], error) {
 	s.clientHeartbeats.Store("clientID", req.Msg.Timestamp)
 	return connect.NewResponse(&v1.HeartbeatResponse{}), nil
 }
 
-// StreamConnection handles bidirectional streaming for task updates and assignments.
+// PullEvents handles bidirectional streaming for task updates and assignments.
 func (s *TaskServer) PullEvents(ctx context.Context, req *connect.Request[v1.PullEventsRequest], stream *connect.ServerStream[v1.PullEventsResponse]) error {
 	ticker := time.NewTicker(10 * time.Second) // Trigger every 10 seconds
 	defer ticker.Stop()
@@ -302,7 +313,6 @@ func (s *TaskServer) PullEvents(ctx context.Context, req *connect.Request[v1.Pul
 			}
 
 			for _, t := range tasks {
-
 				if err := stream.Send(&v1.PullEventsResponse{
 					Work: &v1.WorkAssignment{
 						AssignmentId: int64(t.ID),
@@ -322,7 +332,7 @@ func (s *TaskServer) PullEvents(ctx context.Context, req *connect.Request[v1.Pul
 	}
 }
 
-// updateTaskStatus updates the task status and creates a history entry
+// updateTaskStatus updates the task status and creates a history entry.
 func (s *TaskServer) updateTaskStatus(ctx context.Context, taskID uint, status v1.TaskStatusEnum, message string) error {
 	if err := s.taskRepo.UpdateTaskStatus(ctx, taskID, int(status)); err != nil {
 		return fmt.Errorf("failed to update task status: %w", err)
@@ -335,7 +345,7 @@ func (s *TaskServer) updateTaskStatus(ctx context.Context, taskID uint, status v
 	return nil
 }
 
-// handleUpdateTaskStatus processes task status update requests
+// handleUpdateTaskStatus processes task status update requests.
 func (s *TaskServer) handleUpdateTaskStatus(ctx context.Context, update *v1.UpdateTaskStatusRequest) error {
 	if err := s.taskRepo.UpdateTaskStatus(ctx, uint(update.Id), int(update.Status)); err != nil {
 		s.metrics.errorCounter.WithLabelValues("update_task_status").Inc()
@@ -344,7 +354,6 @@ func (s *TaskServer) handleUpdateTaskStatus(ctx context.Context, update *v1.Upda
 
 	if err := s.createTaskStatusHistory(ctx, uint(update.Id), int(update.Status), update.Message); err != nil {
 		s.logger.Printf("WARNING: Failed to create task status history: %v", err)
-		// Consider whether to return an error here or continue
 	}
 
 	s.logger.Printf("Task status updated: id=%d, new status=%d", update.Id, update.Status)
