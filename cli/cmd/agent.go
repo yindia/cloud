@@ -95,14 +95,14 @@ func runStreamConnection(ctx context.Context, wg *sync.WaitGroup, logger *slog.L
 	return nil
 }
 
-// sendPeriodicRequests sends periodic RunCommand requests to the server.
+// sendPeriodicRequests sends periodic heartbeat requests to the server.
 func sendPeriodicRequests(ctx context.Context, logger *slog.Logger, client cloudv1connect.TaskManagementServiceClient) {
-
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			logger.Info("Stopping periodic requests due to context cancellation")
 			return
 		case <-ticker.C:
 			_, err := client.Heartbeat(ctx, connect.NewRequest(&v1.HeartbeatRequest{
@@ -110,10 +110,10 @@ func sendPeriodicRequests(ctx context.Context, logger *slog.Logger, client cloud
 			}))
 
 			if err != nil {
-				logger.Error("Error sending request", "error", err)
+				logger.Error("Error sending heartbeat request", "error", err)
 				continue
 			}
-			logger.Debug("Sent periodic RunCommand request")
+			logger.Debug("Sent periodic heartbeat request")
 		}
 	}
 }

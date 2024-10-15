@@ -90,13 +90,15 @@ func newTaskMetrics() *taskMetrics {
 
 // NewTaskServer creates and returns a new instance of TaskServer.
 // It initializes the validator, sets up the logger, and configures metrics.
+// The maxWorkers parameter can be configured to control the number of concurrent workers.
 func NewTaskServer(repo interfaces.TaskManagmentInterface) cloudv1connect.TaskManagementServiceHandler {
+	// Initialize the validator for request validation
 	validator, err := protovalidate.New()
 	if err != nil {
 		log.Fatalf("Failed to initialize validator: %v", err)
 	}
 
-	maxWorkers := 500 // You can make this configurable
+	maxWorkers := 500 // Configurable maximum number of concurrent workers
 	server := &TaskServer{
 		taskRepo:         repo.TaskRepo(),
 		historyRepo:      repo.TaskHistoryRepo(),
@@ -104,7 +106,7 @@ func NewTaskServer(repo interfaces.TaskManagmentInterface) cloudv1connect.TaskMa
 		validator:        validator,
 		metrics:          newTaskMetrics(),
 		maxWorkers:       maxWorkers,
-		heartbeatTimeout: 30 * time.Second, // Configurable timeout
+		heartbeatTimeout: 30 * time.Second, // Configurable timeout for heartbeats
 	}
 
 	server.logger.Println("TaskServer initialized successfully")
@@ -120,6 +122,7 @@ func (s *TaskServer) CreateTask(ctx context.Context, req *connect.Request[v1.Cre
 	s.metrics.createTaskCounter.Inc()
 	s.logger.Printf("Creating task: name=%s, type=%s", req.Msg.Name, req.Msg.GetType())
 
+	// Validate the incoming request
 	if err := s.validateRequest(req.Msg); err != nil {
 		s.logger.Printf("CreateTask validation failed: %v", err)
 		return nil, err
@@ -127,6 +130,7 @@ func (s *TaskServer) CreateTask(ctx context.Context, req *connect.Request[v1.Cre
 
 	newTask := s.prepareNewTask(req.Msg)
 
+	// Attempt to create the task in the repository
 	createdTask, err := s.taskRepo.CreateTask(ctx, newTask)
 	if err != nil {
 		s.metrics.errorCounter.WithLabelValues("create_task").Inc()
@@ -137,7 +141,7 @@ func (s *TaskServer) CreateTask(ctx context.Context, req *connect.Request[v1.Cre
 	return connect.NewResponse(&v1.CreateTaskResponse{Id: int32(createdTask.ID)}), nil
 }
 
-// GetTask retrieves the status of a task.
+// GetTask retrieves the status of a task by its ID.
 func (s *TaskServer) GetTask(ctx context.Context, req *connect.Request[v1.GetTaskRequest]) (*connect.Response[v1.Task], error) {
 	timer := prometheus.NewTimer(s.metrics.taskDuration.WithLabelValues("get_task"))
 	defer timer.ObserveDuration()

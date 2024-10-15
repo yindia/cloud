@@ -62,7 +62,7 @@ type Payload struct {
 // TaskStatus defines the observed state of Task
 type TaskStatus struct {
 	// Status is the current status of the task.
-	Status string `json:"status,omitempty"`
+	Status int32 `json:"status,omitempty"`
 
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
