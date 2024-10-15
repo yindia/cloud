@@ -35,7 +35,7 @@ type TaskSpec struct {
 	Type string `json:"type,omitempty"`
 
 	// Status is the current status of the task.
-	Status string `json:"status,omitempty"`
+	Status int32 `json:"status,omitempty"`
 
 	// Retries is the number of retries attempted for this task.
 	Retries int32 `json:"retries,omitempty"`

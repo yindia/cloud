@@ -1,4 +1,4 @@
-package k8s
+package K8s
 
 import (
 	"context"
@@ -10,13 +10,13 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-type k8s struct {
+type K8s struct {
 	kubeconfigPath string
 	client         *kubernetes.Clientset
 }
 
 // Add the following function to create a Kubernetes client for local and in-cluster setup
-func NewK8sClient(kubeconfigPath string) (*k8s, error) {
+func NewK8sClient(kubeconfigPath string) (*K8s, error) {
 	var config *rest.Config
 	var err error
 
@@ -33,14 +33,14 @@ func NewK8sClient(kubeconfigPath string) (*k8s, error) {
 		}
 	}
 
-	return &k8s{
+	return &K8s{
 		kubeconfigPath: kubeconfigPath,
 		client:         kubernetes.NewForConfigOrDie(config),
 	}, nil
 }
 
 // CreateTask creates a new Task resource in the Kubernetes cluster
-func (k *k8s) CreateTask(task *v1.Task) (*v1.Task, error) {
+func (k *K8s) CreateTask(task *v1.Task) (*v1.Task, error) {
 	tasksClient := k.client.RESTClient().
 		Post().
 		Resource("tasks").
@@ -53,7 +53,7 @@ func (k *k8s) CreateTask(task *v1.Task) (*v1.Task, error) {
 }
 
 // GetTask retrieves a Task resource from the Kubernetes cluster
-func (k *k8s) GetTask(namespace, name string) (*v1.Task, error) {
+func (k *K8s) GetTask(namespace, name string) (*v1.Task, error) {
 	result := &v1.Task{}
 	err := k.client.RESTClient().
 		Get().
@@ -66,7 +66,7 @@ func (k *k8s) GetTask(namespace, name string) (*v1.Task, error) {
 }
 
 // UpdateTask updates an existing Task resource in the Kubernetes cluster
-func (k *k8s) UpdateTask(task *v1.Task) (*v1.Task, error) {
+func (k *K8s) UpdateTask(task *v1.Task) (*v1.Task, error) {
 	result := &v1.Task{}
 	err := k.client.RESTClient().
 		Put().
@@ -80,12 +80,12 @@ func (k *k8s) UpdateTask(task *v1.Task) (*v1.Task, error) {
 }
 
 // DeleteTask deletes a Task resource from the Kubernetes cluster
-func (k *k8s) DeleteTask(namespace, name string) error {
+func (k *K8s) DeleteTask(namespace, name string) error {
 	return k.client.RESTClient().
 		Delete().
 		Resource("tasks").
 		Namespace(namespace).
 		Name(name).
 		Do(context.TODO()).
-		Error
+		Error()
 }

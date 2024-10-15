@@ -6,11 +6,15 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	taskApi "task/controller/api/v1"
 	v1 "task/pkg/gen/cloud/v1"
 	"task/pkg/gen/cloud/v1/cloudv1connect"
+	k8s "task/pkg/k8s"
 	"task/pkg/plugins"
 	"task/pkg/x"
 	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
@@ -68,7 +72,10 @@ func runStreamConnection(ctx context.Context, wg *sync.WaitGroup, logger *slog.L
 	var err error
 
 	client := cloudv1connect.NewTaskManagementServiceClient(http.DefaultClient, "http://localhost:8080")
-
+	k8sClient, err := k8s.NewK8sClient("")
+	if err != nil {
+		return fmt.Errorf("failed to create k8s client: %w", err)
+	}
 	go sendPeriodicRequests(ctx, logger, client) // Pass stream as a pointer
 
 	stream, err := client.PullEvents(ctx, connect.NewRequest(&v1.PullEventsRequest{}))
@@ -82,7 +89,7 @@ func runStreamConnection(ctx context.Context, wg *sync.WaitGroup, logger *slog.L
 			return fmt.Errorf("failed to receive response: %w", err)
 		}
 
-		go processWork(ctx, stream.Msg(), logger)
+		go processWork(ctx, stream.Msg(), logger, k8sClient)
 	}
 
 	return nil
@@ -111,51 +118,26 @@ func sendPeriodicRequests(ctx context.Context, logger *slog.Logger, client cloud
 	}
 }
 
-func processWork(ctx context.Context, task *v1.PullEventsResponse, logger *slog.Logger) {
-	maxAttempts := 3
-	initialBackoff := 1 * time.Second
+func processWork(ctx context.Context, task *v1.PullEventsResponse, logger *slog.Logger, k8sClient *k8s.K8s) {
 
-	var finalStatus v1.TaskStatusEnum
-	var finalMessage string
-
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		// Update status to Running for each attempt
-
-		runningMessage := fmt.Sprintf("Running attempt %d of %d", attempt, maxAttempts)
-		if err := updateTaskStatus(ctx, int64(task.Work.Task.Id), v1.TaskStatusEnum_RUNNING, runningMessage); err != nil {
-			logger.Error("Failed to send running status update", "error", err, "task_id", task.Work.Task.Id, "attempt", attempt)
-		}
-
-		_, message, err := processWorkflowUpdate(ctx, task, logger)
-
-		if err != nil {
-			failedMessage := fmt.Sprintf("Attempt %d failed: %v", attempt, err)
-			if err := updateTaskStatus(ctx, int64(task.Work.Task.Id), v1.TaskStatusEnum_FAILED, failedMessage); err != nil {
-				logger.Error("Failed to send failed status update", "error", err, "task_id", task.Work.Task.Id, "attempt", attempt)
-			}
-
-			if attempt == maxAttempts {
-				finalStatus = v1.TaskStatusEnum_FAILED
-				finalMessage = fmt.Sprintf("All %d attempts failed. Last error: %v", maxAttempts, err)
-			} else {
-				// Wait before the next attempt
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(initialBackoff * time.Duration(1<<uint(attempt-1))):
-				}
-				continue
-			}
-		} else {
-			finalStatus = v1.TaskStatusEnum_SUCCEEDED
-			finalMessage = fmt.Sprintf("Task completed successfully on attempt %d: %s", attempt, message)
-			break
-		}
-	}
-
-	// Send final status update
-	if err := updateTaskStatus(ctx, int64(task.Work.Task.Id), finalStatus, finalMessage); err != nil {
-		logger.Error("Failed to send final status update", "error", err, "task_id", task.Work.Task.Id)
+	_, err := k8sClient.CreateTask(&taskApi.Task{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("task-%d", task.Work.Task.Id),
+			Namespace: "test",
+		},
+		Spec: taskApi.TaskSpec{
+			ID:   task.Work.Task.Id,
+			Type: task.Work.Task.Type,
+			Payload: taskApi.Payload{
+				Parameters: task.Work.Task.Payload.Parameters,
+			},
+			Status:      int32(task.Work.Task.Status),
+			Description: task.Work.Task.Description,
+		},
+	})
+	if err != nil {
+		logger.Error("Failed to create task", "error", err, "task", task)
+		return
 	}
 }
 
