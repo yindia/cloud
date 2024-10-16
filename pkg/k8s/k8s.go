@@ -5,14 +5,18 @@ import (
 	"os"
 	v1 "task/controller/api/v1"
 
+	"k8s.io/apimachinery/pkg/runtime" // Import runtime for scheme
+	// Import for GroupVersionKind
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	// Import for error handling
 )
 
 type K8s struct {
 	kubeconfigPath string
 	client         *kubernetes.Clientset
+	scheme         *runtime.Scheme // Add scheme to K8s struct
 }
 
 // Add the following function to create a Kubernetes client for local and in-cluster setup
@@ -33,10 +37,23 @@ func NewK8sClient(kubeconfigPath string) (*K8s, error) {
 		}
 	}
 
-	return &K8s{
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	k := &K8s{
 		kubeconfigPath: kubeconfigPath,
-		client:         kubernetes.NewForConfigOrDie(config),
-	}, nil
+		client:         clientset,
+		scheme:         runtime.NewScheme(), // Initialize the scheme
+	}
+
+	// Register your Task type with the scheme
+	if err := v1.AddToScheme(k.scheme); err != nil {
+		return nil, err
+	}
+
+	return k, nil
 }
 
 // CreateTask creates a new Task resource in the Kubernetes cluster

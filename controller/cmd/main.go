@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	taskiov1 "task/controller/api/v1"
-	"task/controller/internal/controller"
+	controller "task/controller/internal/controller"
 	"task/pkg/gen/cloud/v1/cloudv1connect"
 	// +kubebuilder:scaffold:imports
 )
@@ -149,7 +149,7 @@ func main() {
 	if err = (&controller.TaskReconciler{
 		Client:      mgr.GetClient(),
 		Scheme:      mgr.GetScheme(),
-		cloudClient: cloudv1connect.NewTaskManagementServiceClient(http.DefaultClient, "https://localhost:8080"),
+		CloudClient: cloudv1connect.NewTaskManagementServiceClient(http.DefaultClient, "https://localhost:8080"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Task")
 		os.Exit(1)

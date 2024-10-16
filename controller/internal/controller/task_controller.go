@@ -37,7 +37,7 @@ import (
 type TaskReconciler struct {
 	client.Client
 	Scheme      *runtime.Scheme
-	cloudClient cloudv1connect.TaskManagementServiceClient
+	CloudClient cloudv1connect.TaskManagementServiceClient
 }
 
 // +kubebuilder:rbac:groups=task.io,resources=tasks,verbs=get;list;watch;create;update;patch;delete
@@ -121,7 +121,7 @@ func (r *TaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // updateTaskStatus updates the status of a task using the Task Management Service.
 func (r *TaskReconciler) updateTaskStatus(ctx context.Context, taskID int64, status cloudv1.TaskStatusEnum, message string) error {
-	_, err := r.cloudClient.UpdateTaskStatus(ctx, connect.NewRequest(&cloudv1.UpdateTaskStatusRequest{
+	_, err := r.CloudClient.UpdateTaskStatus(ctx, connect.NewRequest(&cloudv1.UpdateTaskStatusRequest{
 		Id:      int32(taskID),
 		Status:  status,
 		Message: message,

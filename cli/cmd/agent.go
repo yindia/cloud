@@ -72,7 +72,7 @@ func runStreamConnection(ctx context.Context, wg *sync.WaitGroup, logger *slog.L
 	var err error
 
 	client := cloudv1connect.NewTaskManagementServiceClient(http.DefaultClient, "http://localhost:8080")
-	k8sClient, err := k8s.NewK8sClient("")
+	k8sClient, err := k8s.NewK8sClient("/Users/yuvraj/.kube/config")
 	if err != nil {
 		return fmt.Errorf("failed to create k8s client: %w", err)
 	}
@@ -91,8 +91,6 @@ func runStreamConnection(ctx context.Context, wg *sync.WaitGroup, logger *slog.L
 
 		go processWork(ctx, stream.Msg(), logger, k8sClient)
 	}
-
-	return nil
 }
 
 // sendPeriodicRequests sends periodic heartbeat requests to the server.

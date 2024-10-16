@@ -39,12 +39,6 @@ make bootstrap
 
 # Run Database 
 docker-compose up -d
-
-# Install river
-go install github.com/riverqueue/river/cmd/river@latest
-
-# Run River migration  (It will create the river resource in the database)
-river migrate-up --database-url "postgres://admin:admin@127.0.0.1:5432/tasks?sslmode=disable"
 ```
 
 
@@ -75,7 +69,7 @@ Access at https://127.0.0.1:3000
 ### 5. Worker (Data Plane)
 Start worker instances:
 ```bash
-./bin/task-cli serve -n 10
+./bin/task-cli serve  --log-level debug
 ```
 
 ## Project Structure
@@ -113,16 +107,20 @@ graph TD
     A[Dashboard Client] -->|Sends Request| B(Server)
     C[CLI Client] -->|Sends Request| B(Server)
 
-    %% Server and its connections
-    B(Server) -->|Reads/Writes| D[(PostgreSQL Database)]
-    B(Server) -->|Publishes Message| E(RiverQueue)
+    %% Control Plane
+    subgraph Control Plane
+        B(Server) -->|Reads/Writes| D[(PostgreSQL Database)]
+    end
 
-    %% RabbitMQ and Worker
-    E(RiverQueue) -->|Sends Message| F(Worker)
-    F(Worker) -->|Consumes Data| G[Executes Work]
-
-    %% Optional back-and-forth communication if needed
-    F(Worker) -->|Update Status| B[(Server)]
+    %% Data Plane
+    subgraph Data Plane
+        E[Agent] -->|Initiates Connection| B[Server]
+        B[Server] -->|Publish W| E[Agent]
+        E -->|Creates CRD| H[CRD]
+        F[Controller] -->|Watches CRD| H
+        F -->|Executes Task| J[Task Execution]
+        F -->|Sends Status Update| B
+    end
 ```
 
 This architecture allows for:
@@ -267,20 +265,6 @@ graph TD
     K --> L
 ```
 
-Reconciliation Job (Run in every 10 minutes) as background job
-
-```mermaid
-graph TD
-    %% Reconciliation Job Flow
-    subgraph Reconciliation Job
-        M[Start Reconciliation Job] --> N[Get List of Stuck Jobs]
-        N --> O{Jobs Found?}
-        O -->|Yes| P[Update Status: Queued]
-        P --> Q[Enqueue Message to River Queue]
-        O -->|No| R[End Reconciliation Job]
-        Q --> R
-    end
-```
 
 ## API Documentation
 - [Proto Docs](https://buf.build/evalsocket/cloud)
@@ -568,54 +552,3 @@ kind delete cluster --name task-service
 This setup allows you to test the entire Task Service stack, including the server, workers, and dependencies, in a local Kubernetes environment. It's an excellent way to validate the Helm charts and ensure everything works together as expected in a Kubernetes setting.
 
 
-## Future Improvements
-
-As we continue to evolve the Task Service, we are exploring several enhancements to improve its scalability, reliability, and management. 
-
-### Kubernetes-Native Task Execution
-
-We are considering leveraging Kubernetes Custom Resource Definitions (CRDs) and custom controllers to manage task execution. This approach would enable us to fully utilize Kubernetes' scheduling and scaling capabilities.
-
-#### High-Level Architecture
-
-```mermaid
-graph TD
-    %% Clients
-    A[Dashboard Client] -->|Sends Request| B(Server)
-    C[CLI Client] -->|Sends Request| B(Server)
-
-    %% Control Plane
-    subgraph Control Plane
-        B(Server) -->|Reads/Writes| D[(PostgreSQL Database)]
-    end
-
-    %% Data Plane
-    subgraph Data Plane
-        E[Agent] -->|Initiates Connection| B[Server]
-        E -->|Creates CRD| H[CRD]
-        F[Controller] -->|Watches CRD| H
-        F -->|Creates Pod for Task| I[Pod]
-        I -->|Executes Task| J[Task Execution]
-        F -->|Sends Status Update| B
-    end
-```
-
-In this architecture:
-
-1. Our agent initiates a streaming connection with the control plane and listens for events.
-2. When a new task is created, the control plane generates an event for the agent.
-3. Upon receiving the event, the agent creates a Custom Resource Definition (CRD) for the task in Kubernetes.
-4. A custom Worker Controller watches for these CRDs and creates pods to execute the tasks.
-5. Each task runs in its own pod, allowing for improved isolation and resource management.
-6. The Worker Controller monitors task execution and sends status updates back to the server.
-
-
-#### Design Advantages
-
-- **Separation of Concerns**: The customer does not need to open a port; our agent initiates the connection, and only the agent has permission to create resources inside the Data Plane.
-- **Single Point of Setup**: Only the agent is required to set up the Data Plane, creating the necessary resources such as the controller, CRD, and other components.
-- **Multiple Data Planes**: Customers can run multiple Data Planes with one Control Plane based on their requirements (from bare metal to any cloud). In the future, we can add functionality to route tasks to specific Data Planes as needed.
-- **Security**: No sensitive information is stored in the Control Plane; we only retain metadata, ensuring enhanced security.
-- **Infinite Scalability**: The architecture supports scaling as needed to accommodate varying workloads.
-- **Co-location Flexibility**: Customers can run both the Data Plane and Control Plane together inside their VPC for easier management.
-- **Secure Storage**: All input parameters are stored as S3 objects, with only references to these objects kept in the metadata, optimizing storage usage.
