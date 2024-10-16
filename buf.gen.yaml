@@ -8,7 +8,7 @@ managed:
       - buf.build/bufbuild/protovalidate
 plugins:
   - plugin: buf.build/protocolbuffers/python:v28.2
-    out: modules/
+    out: pytask/
   - plugin: buf.build/connectrpc/go:v1.11.1
     out: pkg/gen/
     opt:

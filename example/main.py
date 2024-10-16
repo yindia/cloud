@@ -41,17 +41,3 @@ def hello_world_2(a : int, b : int) -> bool:
     return True
 
 
-@Workflow(WorkflowSpec(
-    name="hello_world",
-    description="This is a test workflow",
-    metadata={
-        "author": "Yuvraj Singh",
-        "version": "1.0.0",
-    },
-))
-def hello_world_workflow(a : int, b : int)-> bool:
-    return hello_world(a=a, b=b) or hello_world(a=a, b=b)
-
-
-if __name__ == "__main__":
-    hello_world()

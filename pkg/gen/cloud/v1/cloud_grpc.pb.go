@@ -54,7 +54,9 @@ type TaskManagementServiceClient interface {
 	// Retrieves the count of tasks for each status.
 	// Returns a GetStatusResponse containing a map of status counts.
 	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error)
+	// Sends a heartbeat signal to indicate the service is alive.
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
+	// Pulls events related to task execution.
 	PullEvents(ctx context.Context, in *PullEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PullEventsResponse], error)
 }
 
@@ -179,7 +181,9 @@ type TaskManagementServiceServer interface {
 	// Retrieves the count of tasks for each status.
 	// Returns a GetStatusResponse containing a map of status counts.
 	GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error)
+	// Sends a heartbeat signal to indicate the service is alive.
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
+	// Pulls events related to task execution.
 	PullEvents(*PullEventsRequest, grpc.ServerStreamingServer[PullEventsResponse]) error
 	mustEmbedUnimplementedTaskManagementServiceServer()
 }

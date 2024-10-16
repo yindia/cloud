@@ -86,7 +86,8 @@
     },
     "v1HeartbeatResponse": {
       "type": "object",
-      "description": "Response message for the heartbeat request.\n Currently, this message is empty, indicating successful receipt of the heartbeat."
+      "description": "Response message for the heartbeat request.\n Currently, this message is empty, indicating successful receipt of the heartbeat.",
+      "title": "Message for heartbeat response"
     },
     "v1Payload": {
       "type": "object",
@@ -158,25 +159,29 @@
           "items": {
             "type": "string"
           },
-          "title": "IDs of tasks that must complete before this task"
+          "description": "IDs of tasks that must complete before this task."
         },
         "baseImage": {
-          "type": "string"
+          "type": "string",
+          "description": "Base image for the task execution environment."
         },
         "entrypoint": {
-          "type": "string"
+          "type": "string",
+          "description": "Entrypoint for the task execution."
         },
         "args": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Arguments for the task execution."
         },
         "env": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "description": "Environment variables for the task execution."
         }
       },
       "title": "Message for Task status"
@@ -238,11 +243,11 @@
         "assignmentId": {
           "type": "string",
           "format": "int64",
-          "title": "Unique identifier for the assignment"
+          "description": "Unique identifier for the assignment."
         },
         "task": {
           "$ref": "#/definitions/v1Task",
-          "title": "The task to be executed"
+          "description": "The task to be executed."
         }
       },
       "title": "Message for work assignments"

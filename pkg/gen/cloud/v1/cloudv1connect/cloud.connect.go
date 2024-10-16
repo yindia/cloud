@@ -80,7 +80,9 @@ type TaskManagementServiceClient interface {
 	// Retrieves the count of tasks for each status.
 	// Returns a GetStatusResponse containing a map of status counts.
 	GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error)
+	// Sends a heartbeat signal to indicate the service is alive.
 	Heartbeat(context.Context, *connect.Request[v1.HeartbeatRequest]) (*connect.Response[v1.HeartbeatResponse], error)
+	// Pulls events related to task execution.
 	PullEvents(context.Context, *connect.Request[v1.PullEventsRequest]) (*connect.ServerStreamForClient[v1.PullEventsResponse], error)
 }
 
@@ -209,7 +211,9 @@ type TaskManagementServiceHandler interface {
 	// Retrieves the count of tasks for each status.
 	// Returns a GetStatusResponse containing a map of status counts.
 	GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error)
+	// Sends a heartbeat signal to indicate the service is alive.
 	Heartbeat(context.Context, *connect.Request[v1.HeartbeatRequest]) (*connect.Response[v1.HeartbeatResponse], error)
+	// Pulls events related to task execution.
 	PullEvents(context.Context, *connect.Request[v1.PullEventsRequest], *connect.ServerStream[v1.PullEventsResponse]) error
 }
 

@@ -3,13 +3,31 @@ import os
 import ast
 import logging
 from typing import List, Dict, Union, Any
-from modules.task import TaskSpec
-from modules.workflow import WorkflowSpec
-from modules.cloud.v1.cloud_pb2 import Task, Workflow
+from cloud.v1.cloud_pb2 import Task  # Adjusted import
 import tarfile
 import tempfile
 import json
 import fnmatch
+
+from typing import TypedDict, List, Dict
+from enum import Enum
+
+
+class TaskType(Enum):
+    PYTHON = "python"
+
+
+class TaskSpec(TypedDict):
+    name: str
+    type: TaskType
+    description: str
+    dependencies: List[str]
+    metadata: Dict[str, str]
+    base_image: str
+    entrypoint: str
+    args: List[str]
+    env: Dict[str, str]
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -29,8 +47,7 @@ def parse_decorator_config(file_path: str) -> Dict[str, List[Dict[str, Union[str
         tree = ast.parse(file.read())
 
     configs = {
-        'tasks': [],
-        'workflows': []
+        'tasks': []
     }
 
     def get_value(node: ast.AST) -> Any:
@@ -75,7 +92,7 @@ def parse_decorator_config(file_path: str) -> Dict[str, List[Dict[str, Union[str
         if isinstance(node, ast.FunctionDef):
             for decorator in node.decorator_list:
                 if isinstance(decorator, ast.Call) and decorator.func.id in ['task', 'Workflow']:
-                    config: Union[TaskSpec, WorkflowSpec] = {}
+                    config: Union[TaskSpec] = {}
                     for kw in decorator.args[0].keywords:
                         config[kw.arg] = get_value(kw.value)
                     
@@ -90,8 +107,6 @@ def parse_decorator_config(file_path: str) -> Dict[str, List[Dict[str, Union[str
                     
                     if decorator.func.id == 'task':
                         configs['tasks'].append(item)
-                    else:
-                        configs['workflows'].append(item)
 
     return configs
 
@@ -147,8 +162,7 @@ def process_file(file_path: str, custom_image: str = None) -> None:
     
     with tempfile.TemporaryDirectory() as temp_dir:
         task_protos = []
-        workflow_protos = []
-        
+     
         if parsed_configs['tasks']:
             logger.info(f"Found {len(parsed_configs['tasks'])} tasks in {file_path}")
             for task in parsed_configs['tasks']:
@@ -157,43 +171,25 @@ def process_file(file_path: str, custom_image: str = None) -> None:
                 logger.debug(f"  Input: {task['input']}")
                 logger.debug(f"  Output: {task['output']}")
                 
-                task_proto = Task(
-                    name=task['config']["name"],
-                    type=task['config']["type"],
-                    description=task['config']["description"],
-                    dependencies=task['config']["dependencies"],
-                    metadata=task['config']["metadata"],
-                    base_image=custom_image if custom_image else task['config']["base_image"],
-                    entrypoint=task['config']["entrypoint"],
-                    args=task['config']["args"],
-                    env=task['config']["env"]
-                )
-                task_protos.append(task_proto)
+                # task_proto = Task(
+                #     name=task['config']["name"],
+                #     type=task['config']["type"],
+                #     description=task['config']["description"],
+                #     dependencies=task['config']["dependencies"],
+                #     metadata=task['config']["metadata"],
+                #     base_image=custom_image if custom_image else task['config']["base_image"],
+                #     entrypoint=task['config']["entrypoint"],
+                #     args=task['config']["args"],
+                #     env=task['config']["env"]
+                # )
+                # task_protos.append(task_proto)
         
-        if parsed_configs['workflows']:
-            logger.info(f"Found {len(parsed_configs['workflows'])} workflows in {file_path}")
-            for workflow in parsed_configs['workflows']:
-                logger.debug(f"Workflow: {workflow['name']}")
-                logger.debug(f"  Config: {workflow['config']}")
-                logger.debug(f"  Input: {workflow['input']}")
-                logger.debug(f"  Output: {workflow['output']}")
-                logger.debug(f"  workflow: {workflow['workflow']}")
-                
-                workflow_proto = Workflow(
-                    name=workflow['config']["name"],
-                    description=workflow['config']["description"],
-                    metadata=workflow['config']["metadata"],
-                )
-                workflow_protos.append(workflow_proto)
+
         
         # Save protos in binary format
         for i, task_proto in enumerate(task_protos):
             with open(os.path.join(temp_dir, f'task_{i}.pb'), 'wb') as f:
                 f.write(task_proto.SerializeToString())
-        
-        for i, workflow_proto in enumerate(workflow_protos):
-            with open(os.path.join(temp_dir, f'workflow_{i}.pb'), 'wb') as f:
-                f.write(workflow_proto.SerializeToString())
         
         # Compress the entire code
         code_tar_path = os.path.join(temp_dir, 'code.tar.gz')

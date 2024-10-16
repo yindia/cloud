@@ -117,15 +117,6 @@ message Task {
     map<string, string> env = 14;
 }
 
-// Workflow represents a collection of tasks organized in a Directed Acyclic Graph (DAG).
-message Workflow {
-    string id = 1;          // Unique identifier for the workflow.
-    string name = 2;        // Name of the workflow.
-    string description = 3; // Description of the workflow.
-    repeated Task tasks = 4; // List of tasks in the workflow.
-    map<string, string> metadata = 5; // Additional metadata for the workflow.
-}
-
 // ExecutionStatus represents the current state of a task or workflow execution.
 enum ExecutionStatus {
     EXECUTION_STATUS_UNSPECIFIED = 0; // Status is not specified.
@@ -144,15 +135,6 @@ message TaskExecution {
     map<string, string> execution_metadata = 5; // Metadata related to the task execution.
 }
 
-// WorkflowExecution represents the execution of a workflow.
-message WorkflowExecution {
-    string workflow_id = 1;            // Unique identifier for the workflow being executed.
-    ExecutionStatus status = 2;        // Current execution status of the workflow.
-    repeated TaskExecution task_executions = 3; // List of task executions within the workflow.
-    google.protobuf.Timestamp created_at = 4; // Timestamp of when the workflow execution started.
-    google.protobuf.Timestamp updated_at = 5; // Timestamp of the last update to the workflow execution.
-    map<string, string> execution_metadata = 6; // Metadata related to the workflow execution.
-}
 
 // Message for Task history
 message TaskHistory {
