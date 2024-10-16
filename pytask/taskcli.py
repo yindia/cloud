@@ -8,7 +8,8 @@ import tarfile
 import tempfile
 import json
 import fnmatch
-
+import sys
+import importlib
 from typing import TypedDict, List, Dict
 from enum import Enum
 
@@ -109,6 +110,21 @@ def parse_decorator_config(file_path: str) -> Dict[str, List[Dict[str, Union[str
                         configs['tasks'].append(item)
 
     return configs
+
+
+@click.command()
+@click.argument('task_name', type=str)
+def run(task_name: str) -> None:
+    """
+    Run a specified task by name.
+
+    Args:
+        task_name (str): The name of the task to run.
+    """
+    # task_module = importlib.import_module(".")
+    # task_function = getattr(task_module, task_name) 
+    # task_function() 
+    print(f"Task '{task_name}' executed.")  # Placeholder for task execution logic
 
 @click.group(invoke_without_command=True)
 @click.argument('dir', type=click.Path(exists=True), nargs=1, required=False, default='.')
@@ -216,6 +232,8 @@ def process_file(file_path: str, custom_image: str = None) -> None:
             tar.add(temp_dir, arcname="")
     
     logger.info(f"Stored task and workflow protos in {output_filename}")
+
+cli.add_command(run)  # Register the new command
 
 if __name__ == '__main__':
     cli()
