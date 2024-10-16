@@ -1,7 +1,6 @@
 from typing import TypedDict, List
 from enum import Enum
-from modules.task import task, TaskType, TaskSpec
-from modules.workflow import Workflow, WorkflowSpec
+from pytask import task, TaskType, TaskSpec
 
 @task(TaskSpec(
     name="hello_world",
