@@ -1,7 +1,6 @@
 package task
 
 import (
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -16,9 +15,11 @@ type Task struct {
 	Type        string    `json:"type" gorm:"type:varchar(255);not null"` // Refers to the custom PostgreSQL enum
 	Status      int       `json:"status" gorm:"type:int;not null"`        // Refers to the custom PostgreSQL enum
 	Payload     string    `json:"payload" gorm:"type:jsonb;not null"`     // Storing JSON as a string in PostgreSQL
+	Spec        []byte    `json:"spec" gorm:"type:bytea;not null"`        // Storing binary data in PostgreSQL
 	Retries     int       `json:"retries" gorm:"default:0;check:retries >= 0 AND retries <= 10"`
 	Priority    int       `json:"priority" gorm:"default:0;check:priority >= 0"`
 	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime; not null"`
+	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime; not null"`
 }
 
 // TableName returns the custom table name for the Task model.
@@ -39,12 +40,6 @@ func (t *Task) BeforeCreate(tx *gorm.DB) (err error) {
 	// Ensure task status is valid
 	if t.Status > 4 {
 		return errors.New("invalid task status")
-	}
-
-	// Ensure payload is valid JSON
-	var js json.RawMessage
-	if err := json.Unmarshal([]byte(t.Payload), &js); err != nil {
-		return errors.New("invalid JSON payload")
 	}
 
 	return nil

@@ -4,4 +4,6 @@ package interfaces
 type TaskManagmentInterface interface {
 	TaskRepo() TaskRepo
 	TaskHistoryRepo() TaskHistoryRepo
+	WorkflowRepo() WorkflowRepo
+	ExecutionRepo() ExecutionRepo
 }

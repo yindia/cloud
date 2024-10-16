@@ -6,7 +6,6 @@ import "validate/validate.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
-
 // Enum for Task statuses
 enum TaskStatusEnum {
     QUEUED = 0;    // Task is in the queue, waiting to be processed
@@ -101,49 +100,59 @@ message Task {
     string description = 9 [(validate.rules).string = {
         max_len: 5000
     }];
-    repeated string dependencies = 10;  // IDs of tasks that must complete before this task
+
+    // IDs of tasks that must complete before this task.
+    repeated string dependencies = 10;  
+
+    // Base image for the task execution environment.
     string base_image = 11;
+
+    // Entrypoint for the task execution.
     string entrypoint = 12;
+
+    // Arguments for the task execution.
     repeated string args = 13;
+
+    // Environment variables for the task execution.
     map<string, string> env = 14;
 }
 
-// Workflow represents a collection of tasks organized in a DAG
+// Workflow represents a collection of tasks organized in a Directed Acyclic Graph (DAG).
 message Workflow {
-    string id = 1;
-    string name = 2;
-    string description = 3;
-    repeated Task tasks = 4;
-    map<string, string> metadata = 5;
-  }
+    string id = 1;          // Unique identifier for the workflow.
+    string name = 2;        // Name of the workflow.
+    string description = 3; // Description of the workflow.
+    repeated Task tasks = 4; // List of tasks in the workflow.
+    map<string, string> metadata = 5; // Additional metadata for the workflow.
+}
 
-  // ExecutionStatus represents the current state of a task or workflow execution
+// ExecutionStatus represents the current state of a task or workflow execution.
 enum ExecutionStatus {
-    EXECUTION_STATUS_UNSPECIFIED = 0;
-    EXECUTION_STATUS_PENDING = 1;
-    EXECUTION_STATUS_RUNNING = 2;
-    EXECUTION_STATUS_COMPLETED = 3;
-    EXECUTION_STATUS_FAILED = 4;
-  }
+    EXECUTION_STATUS_UNSPECIFIED = 0; // Status is not specified.
+    EXECUTION_STATUS_PENDING = 1;      // Task or workflow is pending execution.
+    EXECUTION_STATUS_RUNNING = 2;      // Task or workflow is currently running.
+    EXECUTION_STATUS_COMPLETED = 3;    // Task or workflow has completed execution.
+    EXECUTION_STATUS_FAILED = 4;       // Task or workflow has failed.
+}
 
-  // TaskExecution represents the execution of a task
+// TaskExecution represents the execution of a task.
 message TaskExecution {
-    string task_id = 1;
-    ExecutionStatus status = 2;
-    google.protobuf.Timestamp created_at = 3;
-    google.protobuf.Timestamp updated_at = 4;
-    map<string, string> execution_metadata = 5;
-  }
-  
-  // WorkflowExecution represents the execution of a workflow
+    string task_id = 1;                // Unique identifier for the task being executed.
+    ExecutionStatus status = 2;        // Current execution status of the task.
+    google.protobuf.Timestamp created_at = 3; // Timestamp of when the task execution started.
+    google.protobuf.Timestamp updated_at = 4; // Timestamp of the last update to the task execution.
+    map<string, string> execution_metadata = 5; // Metadata related to the task execution.
+}
+
+// WorkflowExecution represents the execution of a workflow.
 message WorkflowExecution {
-    string workflow_id = 1;
-    ExecutionStatus status = 2;
-    repeated TaskExecution task_executions = 3;
-    google.protobuf.Timestamp created_at = 4;
-    google.protobuf.Timestamp updated_at = 5;
-    map<string, string> execution_metadata = 6;
-  }
+    string workflow_id = 1;            // Unique identifier for the workflow being executed.
+    ExecutionStatus status = 2;        // Current execution status of the workflow.
+    repeated TaskExecution task_executions = 3; // List of task executions within the workflow.
+    google.protobuf.Timestamp created_at = 4; // Timestamp of when the workflow execution started.
+    google.protobuf.Timestamp updated_at = 5; // Timestamp of the last update to the workflow execution.
+    map<string, string> execution_metadata = 6; // Metadata related to the workflow execution.
+}
 
 // Message for Task history
 message TaskHistory {
@@ -197,7 +206,6 @@ message UpdateTaskStatusRequest {
     string message = 3 [(validate.rules).string = {max_len: 2000}];
 }
 
-
 // Task Management service definition
 service TaskManagementService {
     // Creates a new task based on the provided request.
@@ -224,11 +232,14 @@ service TaskManagementService {
     // Returns a GetStatusResponse containing a map of status counts.
     rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}    
 
+    // Sends a heartbeat signal to indicate the service is alive.
     rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse) {}
 
+    // Pulls events related to task execution.
     rpc PullEvents(PullEventsRequest) returns (stream PullEventsResponse) {}
 }
 
+// Message for heartbeat request
 message HeartbeatRequest {
     // Timestamp of the heartbeat, in ISO 8601 format (UTC).
     // This timestamp indicates when the heartbeat was sent.
@@ -243,6 +254,7 @@ message HeartbeatRequest {
     }];
 }
 
+// Message for heartbeat response
 message HeartbeatResponse {
     // Response message for the heartbeat request.
     // Currently, this message is empty, indicating successful receipt of the heartbeat.
@@ -262,15 +274,12 @@ message PullEventsResponse {
 
 // Message for work assignments
 message WorkAssignment {
-    // Unique identifier for the assignment
-    int64 assignment_id = 1 ;
+    // Unique identifier for the assignment.
+    int64 assignment_id = 1;
     
-    // The task to be executed
+    // The task to be executed.
     Task task = 2 [(validate.rules).message.required = true];
 }
-
-
-
 
 // Message for GetStatus request (empty)
 message GetStatusRequest {}
@@ -283,7 +292,8 @@ message GetStatusResponse {
 
 // Message for Task List
 message TaskList {
-    repeated Task tasks = 1; // List of tasks in the system.
+    // List of tasks in the system.
+    repeated Task tasks = 1; 
 }
 
 // Message for Task List request

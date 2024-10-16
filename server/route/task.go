@@ -38,6 +38,8 @@ type TaskServer struct {
 	logger           *log.Logger
 	validator        *protovalidate.Validator
 	metrics          *taskMetrics
+	workflowRepo     interfaces.WorkflowRepo
+	executionRepo    interfaces.ExecutionRepo
 	channel          chan task.Task
 	maxWorkers       int
 	clientHeartbeats sync.Map
@@ -102,6 +104,8 @@ func NewTaskServer(repo interfaces.TaskManagmentInterface) cloudv1connect.TaskMa
 	server := &TaskServer{
 		taskRepo:         repo.TaskRepo(),
 		historyRepo:      repo.TaskHistoryRepo(),
+		workflowRepo:     repo.WorkflowRepo(),
+		executionRepo:    repo.ExecutionRepo(),
 		logger:           log.New(os.Stdout, logPrefix, log.LstdFlags|log.Lshortfile),
 		validator:        validator,
 		metrics:          newTaskMetrics(),

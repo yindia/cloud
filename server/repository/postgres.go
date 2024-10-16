@@ -9,8 +9,10 @@ import (
 )
 
 type Postgres struct {
-	task    interfaces.TaskRepo
-	history interfaces.TaskHistoryRepo
+	task      interfaces.TaskRepo
+	history   interfaces.TaskHistoryRepo
+	workflow  interfaces.WorkflowRepo
+	execution interfaces.ExecutionRepo
 }
 
 func (r Postgres) TaskRepo() interfaces.TaskRepo {
@@ -22,9 +24,19 @@ func (r Postgres) TaskHistoryRepo() interfaces.TaskHistoryRepo {
 	return r.history
 }
 
+func (r Postgres) WorkflowRepo() interfaces.WorkflowRepo {
+	return r.workflow
+}
+
+func (r Postgres) ExecutionRepo() interfaces.ExecutionRepo {
+	return r.execution
+}
+
 func NewPostgresRepo(db *gorm.DB) interfaces.TaskManagmentInterface {
 	return &Postgres{
-		task:    gormimpl.NewTaskRepo(db),
-		history: gormimpl.NewTaskHistoryRepo(db),
+		task:      gormimpl.NewTaskRepo(db),
+		history:   gormimpl.NewTaskHistoryRepo(db),
+		workflow:  gormimpl.NewWorkflowRepo(db),
+		execution: gormimpl.NewExecutionRepo(db),
 	}
 }
