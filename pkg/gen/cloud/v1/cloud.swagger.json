@@ -152,6 +152,31 @@
         "description": {
           "type": "string",
           "description": "Description of the task. A large text string with a maximum length of 5000 characters."
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "IDs of tasks that must complete before this task"
+        },
+        "baseImage": {
+          "type": "string"
+        },
+        "entrypoint": {
+          "type": "string"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       },
       "title": "Message for Task status"

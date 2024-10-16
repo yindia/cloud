@@ -4,6 +4,8 @@ package cloud.v1;
 
 import "validate/validate.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
 
 // Enum for Task statuses
 enum TaskStatusEnum {
@@ -99,7 +101,49 @@ message Task {
     string description = 9 [(validate.rules).string = {
         max_len: 5000
     }];
+    repeated string dependencies = 10;  // IDs of tasks that must complete before this task
+    string base_image = 11;
+    string entrypoint = 12;
+    repeated string args = 13;
+    map<string, string> env = 14;
 }
+
+// Workflow represents a collection of tasks organized in a DAG
+message Workflow {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    repeated Task tasks = 4;
+    map<string, string> metadata = 5;
+  }
+
+  // ExecutionStatus represents the current state of a task or workflow execution
+enum ExecutionStatus {
+    EXECUTION_STATUS_UNSPECIFIED = 0;
+    EXECUTION_STATUS_PENDING = 1;
+    EXECUTION_STATUS_RUNNING = 2;
+    EXECUTION_STATUS_COMPLETED = 3;
+    EXECUTION_STATUS_FAILED = 4;
+  }
+
+  // TaskExecution represents the execution of a task
+message TaskExecution {
+    string task_id = 1;
+    ExecutionStatus status = 2;
+    google.protobuf.Timestamp created_at = 3;
+    google.protobuf.Timestamp updated_at = 4;
+    map<string, string> execution_metadata = 5;
+  }
+  
+  // WorkflowExecution represents the execution of a workflow
+message WorkflowExecution {
+    string workflow_id = 1;
+    ExecutionStatus status = 2;
+    repeated TaskExecution task_executions = 3;
+    google.protobuf.Timestamp created_at = 4;
+    google.protobuf.Timestamp updated_at = 5;
+    map<string, string> execution_metadata = 6;
+  }
 
 // Message for Task history
 message TaskHistory {

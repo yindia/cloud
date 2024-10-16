@@ -7,6 +7,8 @@ managed:
       - buf.build/envoyproxy/protoc-gen-validate
       - buf.build/bufbuild/protovalidate
 plugins:
+  - plugin: buf.build/protocolbuffers/python:v28.2
+    out: modules/
   - plugin: buf.build/connectrpc/go:v1.11.1
     out: pkg/gen/
     opt:

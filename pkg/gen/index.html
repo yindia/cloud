@@ -362,6 +362,18 @@
                 </li>
               
                 <li>
+                  <a href="#cloud.v1.Task.EnvEntry"><span class="badge">M</span>Task.EnvEntry</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.TaskExecution"><span class="badge">M</span>TaskExecution</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.TaskExecution.ExecutionMetadataEntry"><span class="badge">M</span>TaskExecution.ExecutionMetadataEntry</a>
+                </li>
+              
+                <li>
                   <a href="#cloud.v1.TaskHistory"><span class="badge">M</span>TaskHistory</a>
                 </li>
               
@@ -381,6 +393,26 @@
                   <a href="#cloud.v1.WorkAssignment"><span class="badge">M</span>WorkAssignment</a>
                 </li>
               
+                <li>
+                  <a href="#cloud.v1.Workflow"><span class="badge">M</span>Workflow</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.Workflow.MetadataEntry"><span class="badge">M</span>Workflow.MetadataEntry</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.WorkflowExecution"><span class="badge">M</span>WorkflowExecution</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.WorkflowExecution.ExecutionMetadataEntry"><span class="badge">M</span>WorkflowExecution.ExecutionMetadataEntry</a>
+                </li>
+              
+              
+                <li>
+                  <a href="#cloud.v1.ExecutionStatus"><span class="badge">E</span>ExecutionStatus</a>
+                </li>
               
                 <li>
                   <a href="#cloud.v1.TaskStatusEnum"><span class="badge">E</span>TaskStatusEnum</a>
@@ -3098,6 +3130,41 @@ This format ensures consistent time representation across different systems. </p
                   <td><p>Description of the task. A large text string with a maximum length of 5000 characters. </p></td>
                 </tr>
               
+                <tr>
+                  <td>dependencies</td>
+                  <td><a href="#string">string</a></td>
+                  <td>repeated</td>
+                  <td><p>IDs of tasks that must complete before this task </p></td>
+                </tr>
+              
+                <tr>
+                  <td>base_image</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>entrypoint</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>args</td>
+                  <td><a href="#string">string</a></td>
+                  <td>repeated</td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>env</td>
+                  <td><a href="#cloud.v1.Task.EnvEntry">Task.EnvEntry</a></td>
+                  <td>repeated</td>
+                  <td><p> </p></td>
+                </tr>
+              
             </tbody>
           </table>
 
@@ -3220,6 +3287,120 @@ This format ensures consistent time representation across different systems. </p
               </tbody>
             </table>
             
+          
+
+        
+      
+        <h3 id="cloud.v1.Task.EnvEntry">Task.EnvEntry</h3>
+        <p></p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>key</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>value</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+        <h3 id="cloud.v1.TaskExecution">TaskExecution</h3>
+        <p>TaskExecution represents the execution of a task</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>task_id</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>status</td>
+                  <td><a href="#cloud.v1.ExecutionStatus">ExecutionStatus</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>created_at</td>
+                  <td><a href="#google.protobuf.Timestamp">google.protobuf.Timestamp</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>updated_at</td>
+                  <td><a href="#google.protobuf.Timestamp">google.protobuf.Timestamp</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>execution_metadata</td>
+                  <td><a href="#cloud.v1.TaskExecution.ExecutionMetadataEntry">TaskExecution.ExecutionMetadataEntry</a></td>
+                  <td>repeated</td>
+                  <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+        <h3 id="cloud.v1.TaskExecution.ExecutionMetadataEntry">TaskExecution.ExecutionMetadataEntry</h3>
+        <p></p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>key</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>value</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
           
 
         
@@ -3598,7 +3779,221 @@ If not specified, tasks of all types will be returned. </p></td>
 
         
       
+        <h3 id="cloud.v1.Workflow">Workflow</h3>
+        <p>Workflow represents a collection of tasks organized in a DAG</p>
 
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>id</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>name</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>description</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>tasks</td>
+                  <td><a href="#cloud.v1.Task">Task</a></td>
+                  <td>repeated</td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>metadata</td>
+                  <td><a href="#cloud.v1.Workflow.MetadataEntry">Workflow.MetadataEntry</a></td>
+                  <td>repeated</td>
+                  <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+        <h3 id="cloud.v1.Workflow.MetadataEntry">Workflow.MetadataEntry</h3>
+        <p></p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>key</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>value</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+        <h3 id="cloud.v1.WorkflowExecution">WorkflowExecution</h3>
+        <p>WorkflowExecution represents the execution of a workflow</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>workflow_id</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>status</td>
+                  <td><a href="#cloud.v1.ExecutionStatus">ExecutionStatus</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>task_executions</td>
+                  <td><a href="#cloud.v1.TaskExecution">TaskExecution</a></td>
+                  <td>repeated</td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>created_at</td>
+                  <td><a href="#google.protobuf.Timestamp">google.protobuf.Timestamp</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>updated_at</td>
+                  <td><a href="#google.protobuf.Timestamp">google.protobuf.Timestamp</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>execution_metadata</td>
+                  <td><a href="#cloud.v1.WorkflowExecution.ExecutionMetadataEntry">WorkflowExecution.ExecutionMetadataEntry</a></td>
+                  <td>repeated</td>
+                  <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+        <h3 id="cloud.v1.WorkflowExecution.ExecutionMetadataEntry">WorkflowExecution.ExecutionMetadataEntry</h3>
+        <p></p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>key</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>value</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+
+      
+        <h3 id="cloud.v1.ExecutionStatus">ExecutionStatus</h3>
+        <p>ExecutionStatus represents the current state of a task or workflow execution</p>
+        <table class="enum-table">
+          <thead>
+            <tr><td>Name</td><td>Number</td><td>Description</td></tr>
+          </thead>
+          <tbody>
+            
+              <tr>
+                <td>EXECUTION_STATUS_UNSPECIFIED</td>
+                <td>0</td>
+                <td><p></p></td>
+              </tr>
+            
+              <tr>
+                <td>EXECUTION_STATUS_PENDING</td>
+                <td>1</td>
+                <td><p></p></td>
+              </tr>
+            
+              <tr>
+                <td>EXECUTION_STATUS_RUNNING</td>
+                <td>2</td>
+                <td><p></p></td>
+              </tr>
+            
+              <tr>
+                <td>EXECUTION_STATUS_COMPLETED</td>
+                <td>3</td>
+                <td><p></p></td>
+              </tr>
+            
+              <tr>
+                <td>EXECUTION_STATUS_FAILED</td>
+                <td>4</td>
+                <td><p></p></td>
+              </tr>
+            
+          </tbody>
+        </table>
       
         <h3 id="cloud.v1.TaskStatusEnum">TaskStatusEnum</h3>
         <p>Enum for Task statuses</p>
