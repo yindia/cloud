@@ -334,11 +334,27 @@
                 </li>
               
                 <li>
+                  <a href="#cloud.v1.HeartbeatRequest"><span class="badge">M</span>HeartbeatRequest</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.HeartbeatResponse"><span class="badge">M</span>HeartbeatResponse</a>
+                </li>
+              
+                <li>
                   <a href="#cloud.v1.Payload"><span class="badge">M</span>Payload</a>
                 </li>
               
                 <li>
                   <a href="#cloud.v1.Payload.ParametersEntry"><span class="badge">M</span>Payload.ParametersEntry</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.PullEventsRequest"><span class="badge">M</span>PullEventsRequest</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.PullEventsResponse"><span class="badge">M</span>PullEventsResponse</a>
                 </li>
               
                 <li>
@@ -359,6 +375,10 @@
               
                 <li>
                   <a href="#cloud.v1.UpdateTaskStatusRequest"><span class="badge">M</span>UpdateTaskStatusRequest</a>
+                </li>
+              
+                <li>
+                  <a href="#cloud.v1.WorkAssignment"><span class="badge">M</span>WorkAssignment</a>
                 </li>
               
               
@@ -2607,7 +2627,7 @@ preventing excessively long descriptions. </p></td>
                   <td>status_counts</td>
                   <td><a href="#cloud.v1.GetStatusResponse.StatusCountsEntry">GetStatusResponse.StatusCountsEntry</a></td>
                   <td>repeated</td>
-                  <td><p>Map of task statuses and their counts </p></td>
+                  <td><p>Map of task statuses and their counts. </p></td>
                 </tr>
               
             </tbody>
@@ -2804,6 +2824,84 @@ Maximum of 1000 entries prevents excessive data transfer and processing for very
 
         
       
+        <h3 id="cloud.v1.HeartbeatRequest">HeartbeatRequest</h3>
+        <p></p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>timestamp</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p>Timestamp of the heartbeat, in ISO 8601 format (UTC).
+This timestamp indicates when the heartbeat was sent. </p></td>
+                </tr>
+              
+                <tr>
+                  <td>uuid</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p>Unique identifier for the heartbeat request. This UUID helps in tracking and correlating requests.
+It should be a valid UUID format. </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+            
+            
+            <h4>Validated Fields</h4>
+            <table>
+              <thead>
+                <tr>
+                  <td>Field</td>
+                  <td>Validations</td>
+                </tr>
+              </thead>
+              <tbody>
+              
+                <tr>
+                  <td>timestamp</td>
+                  <td>
+                    <ul>
+                    
+                      <li>string.pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$</li>
+                    
+                    </ul>
+                  </td>
+                </tr>
+              
+                <tr>
+                  <td>uuid</td>
+                  <td>
+                    <ul>
+                    
+                      <li>string.pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$</li>
+                    
+                    </ul>
+                  </td>
+                </tr>
+              
+              </tbody>
+            </table>
+            
+          
+
+        
+      
+        <h3 id="cloud.v1.HeartbeatResponse">HeartbeatResponse</h3>
+        <p>Response message for the heartbeat request.</p><p>Currently, this message is empty, indicating successful receipt of the heartbeat.</p>
+
+        
+
+        
+      
         <h3 id="cloud.v1.Payload">Payload</h3>
         <p>Message for Task Payload</p>
 
@@ -2881,6 +2979,39 @@ Values are limited to 1024 characters to prevent excessive data storage. </p></t
                   <td><a href="#string">string</a></td>
                   <td></td>
                   <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+        <h3 id="cloud.v1.PullEventsRequest">PullEventsRequest</h3>
+        <p>Message for stream requests</p><p>Request message for pulling events.</p><p>Currently, this message is empty, indicating that no specific parameters are required.</p>
+
+        
+
+        
+      
+        <h3 id="cloud.v1.PullEventsResponse">PullEventsResponse</h3>
+        <p>Message for stream responses</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>work</td>
+                  <td><a href="#cloud.v1.WorkAssignment">WorkAssignment</a></td>
+                  <td></td>
+                  <td><p>Work assignment to be executed.
+
+The task to be executed. </p></td>
                 </tr>
               
             </tbody>
@@ -3409,6 +3540,64 @@ If not specified, tasks of all types will be returned. </p></td>
 
         
       
+        <h3 id="cloud.v1.WorkAssignment">WorkAssignment</h3>
+        <p>Message for work assignments</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>assignment_id</td>
+                  <td><a href="#int64">int64</a></td>
+                  <td></td>
+                  <td><p>Unique identifier for the assignment </p></td>
+                </tr>
+              
+                <tr>
+                  <td>task</td>
+                  <td><a href="#cloud.v1.Task">Task</a></td>
+                  <td></td>
+                  <td><p>The task to be executed </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+            
+            
+            <h4>Validated Fields</h4>
+            <table>
+              <thead>
+                <tr>
+                  <td>Field</td>
+                  <td>Validations</td>
+                </tr>
+              </thead>
+              <tbody>
+              
+                <tr>
+                  <td>task</td>
+                  <td>
+                    <ul>
+                    
+                      <li>message.required: true</li>
+                    
+                    </ul>
+                  </td>
+                </tr>
+              
+              </tbody>
+            </table>
+            
+          
+
+        
+      
 
       
         <h3 id="cloud.v1.TaskStatusEnum">TaskStatusEnum</h3>
@@ -3452,7 +3641,7 @@ If not specified, tasks of all types will be returned. </p></td>
               <tr>
                 <td>ALL</td>
                 <td>5</td>
-                <td><p>Task status cannot be determined</p></td>
+                <td><p>Represents all task statuses</p></td>
               </tr>
             
           </tbody>
@@ -3516,6 +3705,20 @@ Returns an empty response to confirm the update was processed.</p></td>
                 <td><a href="#cloud.v1.GetStatusResponse">GetStatusResponse</a></td>
                 <td><p>Retrieves the count of tasks for each status.
 Returns a GetStatusResponse containing a map of status counts.</p></td>
+              </tr>
+            
+              <tr>
+                <td>Heartbeat</td>
+                <td><a href="#cloud.v1.HeartbeatRequest">HeartbeatRequest</a></td>
+                <td><a href="#cloud.v1.HeartbeatResponse">HeartbeatResponse</a></td>
+                <td><p></p></td>
+              </tr>
+            
+              <tr>
+                <td>PullEvents</td>
+                <td><a href="#cloud.v1.PullEventsRequest">PullEventsRequest</a></td>
+                <td><a href="#cloud.v1.PullEventsResponse">PullEventsResponse</a> stream</td>
+                <td><p></p></td>
               </tr>
             
           </tbody>

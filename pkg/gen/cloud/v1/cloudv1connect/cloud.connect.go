@@ -52,6 +52,12 @@ const (
 	// TaskManagementServiceGetStatusProcedure is the fully-qualified name of the
 	// TaskManagementService's GetStatus RPC.
 	TaskManagementServiceGetStatusProcedure = "/cloud.v1.TaskManagementService/GetStatus"
+	// TaskManagementServiceHeartbeatProcedure is the fully-qualified name of the
+	// TaskManagementService's Heartbeat RPC.
+	TaskManagementServiceHeartbeatProcedure = "/cloud.v1.TaskManagementService/Heartbeat"
+	// TaskManagementServicePullEventsProcedure is the fully-qualified name of the
+	// TaskManagementService's PullEvents RPC.
+	TaskManagementServicePullEventsProcedure = "/cloud.v1.TaskManagementService/PullEvents"
 )
 
 // TaskManagementServiceClient is a client for the cloud.v1.TaskManagementService service.
@@ -74,6 +80,8 @@ type TaskManagementServiceClient interface {
 	// Retrieves the count of tasks for each status.
 	// Returns a GetStatusResponse containing a map of status counts.
 	GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error)
+	Heartbeat(context.Context, *connect.Request[v1.HeartbeatRequest]) (*connect.Response[v1.HeartbeatResponse], error)
+	PullEvents(context.Context, *connect.Request[v1.PullEventsRequest]) (*connect.ServerStreamForClient[v1.PullEventsResponse], error)
 }
 
 // NewTaskManagementServiceClient constructs a client for the cloud.v1.TaskManagementService
@@ -116,6 +124,16 @@ func NewTaskManagementServiceClient(httpClient connect.HTTPClient, baseURL strin
 			baseURL+TaskManagementServiceGetStatusProcedure,
 			opts...,
 		),
+		heartbeat: connect.NewClient[v1.HeartbeatRequest, v1.HeartbeatResponse](
+			httpClient,
+			baseURL+TaskManagementServiceHeartbeatProcedure,
+			opts...,
+		),
+		pullEvents: connect.NewClient[v1.PullEventsRequest, v1.PullEventsResponse](
+			httpClient,
+			baseURL+TaskManagementServicePullEventsProcedure,
+			opts...,
+		),
 	}
 }
 
@@ -127,6 +145,8 @@ type taskManagementServiceClient struct {
 	getTaskHistory   *connect.Client[v1.GetTaskHistoryRequest, v1.GetTaskHistoryResponse]
 	updateTaskStatus *connect.Client[v1.UpdateTaskStatusRequest, emptypb.Empty]
 	getStatus        *connect.Client[v1.GetStatusRequest, v1.GetStatusResponse]
+	heartbeat        *connect.Client[v1.HeartbeatRequest, v1.HeartbeatResponse]
+	pullEvents       *connect.Client[v1.PullEventsRequest, v1.PullEventsResponse]
 }
 
 // CreateTask calls cloud.v1.TaskManagementService.CreateTask.
@@ -159,6 +179,16 @@ func (c *taskManagementServiceClient) GetStatus(ctx context.Context, req *connec
 	return c.getStatus.CallUnary(ctx, req)
 }
 
+// Heartbeat calls cloud.v1.TaskManagementService.Heartbeat.
+func (c *taskManagementServiceClient) Heartbeat(ctx context.Context, req *connect.Request[v1.HeartbeatRequest]) (*connect.Response[v1.HeartbeatResponse], error) {
+	return c.heartbeat.CallUnary(ctx, req)
+}
+
+// PullEvents calls cloud.v1.TaskManagementService.PullEvents.
+func (c *taskManagementServiceClient) PullEvents(ctx context.Context, req *connect.Request[v1.PullEventsRequest]) (*connect.ServerStreamForClient[v1.PullEventsResponse], error) {
+	return c.pullEvents.CallServerStream(ctx, req)
+}
+
 // TaskManagementServiceHandler is an implementation of the cloud.v1.TaskManagementService service.
 type TaskManagementServiceHandler interface {
 	// Creates a new task based on the provided request.
@@ -179,6 +209,8 @@ type TaskManagementServiceHandler interface {
 	// Retrieves the count of tasks for each status.
 	// Returns a GetStatusResponse containing a map of status counts.
 	GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error)
+	Heartbeat(context.Context, *connect.Request[v1.HeartbeatRequest]) (*connect.Response[v1.HeartbeatResponse], error)
+	PullEvents(context.Context, *connect.Request[v1.PullEventsRequest], *connect.ServerStream[v1.PullEventsResponse]) error
 }
 
 // NewTaskManagementServiceHandler builds an HTTP handler from the service implementation. It
@@ -217,6 +249,16 @@ func NewTaskManagementServiceHandler(svc TaskManagementServiceHandler, opts ...c
 		svc.GetStatus,
 		opts...,
 	)
+	taskManagementServiceHeartbeatHandler := connect.NewUnaryHandler(
+		TaskManagementServiceHeartbeatProcedure,
+		svc.Heartbeat,
+		opts...,
+	)
+	taskManagementServicePullEventsHandler := connect.NewServerStreamHandler(
+		TaskManagementServicePullEventsProcedure,
+		svc.PullEvents,
+		opts...,
+	)
 	return "/cloud.v1.TaskManagementService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case TaskManagementServiceCreateTaskProcedure:
@@ -231,6 +273,10 @@ func NewTaskManagementServiceHandler(svc TaskManagementServiceHandler, opts ...c
 			taskManagementServiceUpdateTaskStatusHandler.ServeHTTP(w, r)
 		case TaskManagementServiceGetStatusProcedure:
 			taskManagementServiceGetStatusHandler.ServeHTTP(w, r)
+		case TaskManagementServiceHeartbeatProcedure:
+			taskManagementServiceHeartbeatHandler.ServeHTTP(w, r)
+		case TaskManagementServicePullEventsProcedure:
+			taskManagementServicePullEventsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -262,4 +308,12 @@ func (UnimplementedTaskManagementServiceHandler) UpdateTaskStatus(context.Contex
 
 func (UnimplementedTaskManagementServiceHandler) GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("cloud.v1.TaskManagementService.GetStatus is not implemented"))
+}
+
+func (UnimplementedTaskManagementServiceHandler) Heartbeat(context.Context, *connect.Request[v1.HeartbeatRequest]) (*connect.Response[v1.HeartbeatResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("cloud.v1.TaskManagementService.Heartbeat is not implemented"))
+}
+
+func (UnimplementedTaskManagementServiceHandler) PullEvents(context.Context, *connect.Request[v1.PullEventsRequest], *connect.ServerStream[v1.PullEventsResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("cloud.v1.TaskManagementService.PullEvents is not implemented"))
 }

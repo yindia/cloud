@@ -71,17 +71,34 @@ func checkInitialStatus(client cloudv1connect.TaskManagementServiceClient) (map[
 }
 
 func createTasks(client cloudv1connect.TaskManagementServiceClient) error {
-	fmt.Printf("Creating %d tasks...\n", numTasks)
-	createdTasks := 0
+	fmt.Printf("Creating %d tasks in parallel...\n", numTasks)
+
+	// Create a buffered channel to limit concurrency to 100
+	semaphore := make(chan struct{}, 100)
+	errChan := make(chan error, numTasks)
 
 	for i := 0; i < numTasks; i++ {
-		taskType := getTaskType(i)
-		if err := createSingleTask(client, i, taskType); err != nil {
-			return fmt.Errorf("failed to create task %d: %w", i+1, err)
+		semaphore <- struct{}{} // Acquire semaphore
+		go func(index int) {
+			defer func() { <-semaphore }() // Release semaphore
+
+			taskType := getTaskType(index)
+			if err := createSingleTask(client, index, taskType); err != nil {
+				errChan <- fmt.Errorf("failed to create task %d: %w", index+1, err)
+			} else {
+				errChan <- nil
+			}
+		}(i)
+	}
+
+	// Wait for all goroutines to finish and check for errors
+	createdTasks := 0
+	for i := 0; i < numTasks; i++ {
+		if err := <-errChan; err != nil {
+			return err
 		}
 		createdTasks++
-
-		if (i+1)%50 == 0 || i+1 == numTasks {
+		if (createdTasks%50 == 0) || (createdTasks == numTasks) {
 			fmt.Printf("Progress: Created %d/%d tasks\n", createdTasks, numTasks)
 		}
 	}
@@ -119,9 +136,6 @@ func createSingleTask(client cloudv1connect.TaskManagementServiceClient, index i
 }
 
 func monitorTasks(client cloudv1connect.TaskManagementServiceClient, initialStatus map[v1.TaskStatusEnum]int64) error {
-	if numTasks > 1000 {
-		return fmt.Errorf("number of tasks (%d) exceeds the maximum limit of 1000", numTasks)
-	}
 
 	fmt.Println("Monitoring task completion...")
 	startTime := time.Now()

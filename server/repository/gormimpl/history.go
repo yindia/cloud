@@ -2,12 +2,10 @@ package gormimpl
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/riverqueue/river"
 	"gorm.io/gorm"
 
 	interfaces "task/server/repository/interface"
@@ -26,8 +24,7 @@ var (
 
 // TaskHistoryRepo handles database operations for task history entries.
 type TaskHistoryRepo struct {
-	db          *gorm.DB
-	riverClient *river.Client[*sql.Tx]
+	db *gorm.DB
 }
 
 // CreateTaskHistory creates a new history entry for a task.
@@ -70,9 +67,8 @@ func (s *TaskHistoryRepo) ListTaskHistories(ctx context.Context, taskID uint) ([
 
 // NewTaskHistoryRepo creates and returns a new instance of TaskHistoryRepo.
 // It takes a GORM database connection and a River client as parameters.
-func NewTaskHistoryRepo(db *gorm.DB, riverClient *river.Client[*sql.Tx]) interfaces.TaskHistoryRepo {
+func NewTaskHistoryRepo(db *gorm.DB) interfaces.TaskHistoryRepo {
 	return &TaskHistoryRepo{
-		db:          db,
-		riverClient: riverClient,
+		db: db,
 	}
 }

@@ -7,6 +7,7 @@ type Config struct {
 	ServerPort  string `envconfig:"SERVER_PORT" default:"8080"`
 	WorkerCount int    `envconfig:"WORKER_COUNT" default:"100"`
 	Database    DatabaseConfig
+	OAuth2      OAuth2Config
 }
 
 // DatabaseConfig holds the database connection configuration
@@ -18,6 +19,14 @@ type DatabaseConfig struct {
 	Database     string `envconfig:"DB_DATABASE"`
 	SSLMode      string `envconfig:"DB_SSL_MODE" default:"require"`
 	PoolMaxConns int    `envconfig:"DB_POOL_MAX_CONNS" default:"1"`
+}
+
+// OAuth2Config holds the OAuth2 configuration
+type OAuth2Config struct {
+	Provider     string `envconfig:"OAUTH2_PROVIDER"`
+	Issuer       string `envconfig:"OAUTH2_ISSUER"`
+	ClientID     string `envconfig:"OAUTH2_CLIENT_ID"`
+	ClientSecret string `envconfig:"OAUTH2_CLIENT_SECRET"`
 }
 
 // ToMigrationUri returns a string for the migration package with the correct prefix

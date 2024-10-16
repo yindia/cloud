@@ -12,7 +12,7 @@ enum TaskStatusEnum {
     FAILED = 2;    // Task encountered an error and failed to complete
     SUCCEEDED = 3; // Task completed successfully
     UNKNOWN = 4;   // Task status cannot be determined
-    ALL = 5;   // Task status cannot be determined
+    ALL = 5;       // Represents all task statuses
 }
 
 // Message for Task Payload
@@ -178,15 +178,62 @@ service TaskManagementService {
 
     // Retrieves the count of tasks for each status.
     // Returns a GetStatusResponse containing a map of status counts.
-    rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
+    rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}    
+
+    rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse) {}
+
+    rpc PullEvents(PullEventsRequest) returns (stream PullEventsResponse) {}
 }
+
+message HeartbeatRequest {
+    // Timestamp of the heartbeat, in ISO 8601 format (UTC).
+    // This timestamp indicates when the heartbeat was sent.
+    string timestamp = 1 [(validate.rules).string = {
+        pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    }];
+
+    // Unique identifier for the heartbeat request. This UUID helps in tracking and correlating requests.
+    // It should be a valid UUID format.
+    string uuid = 2 [(validate.rules).string = {
+        pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    }];
+}
+
+message HeartbeatResponse {
+    // Response message for the heartbeat request.
+    // Currently, this message is empty, indicating successful receipt of the heartbeat.
+}
+
+// Message for stream requests
+message PullEventsRequest {
+    // Request message for pulling events.
+    // Currently, this message is empty, indicating that no specific parameters are required.
+}
+
+// Message for stream responses
+message PullEventsResponse {
+    // Work assignment to be executed.
+    WorkAssignment work = 1; // The task to be executed.
+}
+
+// Message for work assignments
+message WorkAssignment {
+    // Unique identifier for the assignment
+    int64 assignment_id = 1 ;
+    
+    // The task to be executed
+    Task task = 2 [(validate.rules).message.required = true];
+}
+
+
+
 
 // Message for GetStatus request (empty)
 message GetStatusRequest {}
 
 // Message for GetStatus response
 message GetStatusResponse {
-    // Map of task statuses and their counts
+    // Map of task statuses and their counts.
     map<int32, int64> status_counts = 1;
 }
 

@@ -5,11 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	cloudv1connect "task/pkg/gen/cloud/v1/cloudv1connect"
+	"task/pkg/x"                                  // Import the x package for env and config
+	repository "task/server/repository"           // Import repository package
+	interfaces "task/server/repository/interface" // Import repository package
+	"task/server/route"                           // Import route package
+	oauth2 "task/server/route/oauth2"
+
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 
 	"connectrpc.com/connect"
 	"connectrpc.com/grpchealth"
@@ -17,14 +28,6 @@ import (
 	"connectrpc.com/otelconnect"
 	"github.com/rs/cors"
 	"go.akshayshah.org/connectauth"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
-
-	cloudv1connect "task/pkg/gen/cloud/v1/cloudv1connect"
-	"task/pkg/x"                                  // Import the x package for env and config
-	repository "task/server/repository"           // Import repository package
-	interfaces "task/server/repository/interface" // Import repository package
-	"task/server/route"                           // Import route package
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -36,6 +39,14 @@ const (
 // AuthCtx holds user authentication information
 type AuthCtx struct {
 	Username string
+}
+
+type Config struct {
+	OAuth2 struct {
+		Issuer       string
+		ClientID     string
+		ClientSecret string
+	}
 }
 
 // newCORS initializes CORS settings for the server
@@ -103,6 +114,18 @@ func run() error {
 	exitChan := make(chan os.Signal, 1)
 	signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)
 
+	auth, err := oauth2.NewAuthServer(oauth2.Config{
+		Provider:     env.OAuth2.Provider,
+		Issuer:       env.OAuth2.Issuer,
+		ClientID:     env.OAuth2.ClientID,
+		ClientSecret: env.OAuth2.ClientSecret,
+		RedirectURL:  "http://localhost:8080/authorization-code/callback",
+		SessionKey:   "session",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize authorization server: %w", err)
+	}
+
 	// Create the repository with DB configuration
 	repo, err := repository.GetRepository(env.Database.ToDbConnectionUri(), env.WorkerCount, env.Database.PoolMaxConns)
 	if err != nil {
@@ -112,13 +135,22 @@ func run() error {
 	slog.Info("Database repository initialized", "workerCount", env.WorkerCount)
 
 	// Set up gRPC middleware
-	middleware := connectauth.NewMiddleware(GrpcMiddleware)
+	middleware := connectauth.NewMiddleware(func(ctx context.Context, req *connectauth.Request) (any, error) {
+		if auth.IsAuthenticated(req) {
+			return AuthCtx{}, nil
+		}
+		return nil, errors.New("user is not authenticated") // Updated to return an error for unauthenticated users
+	})
 
 	// Set up HTTP server
 	mux := http.NewServeMux()
 	if err := setupHandlers(mux, repo, middleware); err != nil {
 		return fmt.Errorf("failed to set up handlers: %w", err)
 	}
+
+	mux.HandleFunc("/login", auth.LoginHandler)
+	mux.HandleFunc("/authorization-code/callback", auth.AuthCodeCallbackHandler)
+	mux.HandleFunc("/logout", auth.LogoutHandler)
 
 	// Add Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
@@ -130,10 +162,10 @@ func run() error {
 			newCORS().Handler(mux),
 			&http2.Server{},
 		),
-		ReadHeaderTimeout: time.Second,
-		ReadTimeout:       5 * time.Minute,
-		WriteTimeout:      5 * time.Minute,
-		MaxHeaderBytes:    8 * 1024, // 8KiB
+		MaxHeaderBytes:    1 << 20, // 1 MB
+		ReadHeaderTimeout: 60 * time.Minute,
+		ReadTimeout:       60 * time.Minute,
+		WriteTimeout:      60 * time.Minute,
 	}
 
 	// Start the server in a goroutine
@@ -173,8 +205,10 @@ func setupHandlers(mux *http.ServeMux, repo interfaces.TaskManagmentInterface, m
 		route.NewTaskServer(repo),
 		connect.WithInterceptors(otelInterceptor),
 		connect.WithCompressMinBytes(CompressMinByte),
+		connect.WithSendMaxBytes(math.MaxInt32),
+		connect.WithReadMaxBytes(math.MaxInt32),
 	)
-	mux.Handle(pattern, middleware.Wrap(handler))
+	mux.Handle(pattern, handler)
 
 	// Health check and reflection handlers
 	mux.Handle(grpchealth.NewHandler(
@@ -202,12 +236,4 @@ func shutdownServer(srv *http.Server) error {
 	}
 	slog.Info("Server shutdown completed")
 	return nil
-}
-
-// GrpcMiddleware is the gRPC middleware used for authentication.
-// Currently, it uses a placeholder authentication mechanism.
-func GrpcMiddleware(ctx context.Context, req *connectauth.Request) (any, error) {
-	// TODO: Implement proper authentication logic
-	slog.Warn("Using placeholder authentication", "username", "tqindia")
-	return AuthCtx{Username: "tqindia"}, nil
 }
